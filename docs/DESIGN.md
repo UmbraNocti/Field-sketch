@@ -1,6 +1,6 @@
 # Field-sketch: Design Notes
 
-Status: brainstorm captured, no code yet. Cabinet-fill rules (widths, corners, fillers) are still to come.
+Status: brainstorm captured, no code yet. Cabinet-fill rules (standard widths, corners, fillers) and the conflict priority order are still to come.
 
 ## Purpose
 
@@ -40,7 +40,7 @@ Dimensions:
 - The panel prompts for every wall length. All can be skipped, but missing ones are color-coded.
 - Doors prompt for **rough opening** and **casing-to-casing**.
 - Windows prompt for **rough opening** and **casing-to-casing**, plus **sill height** and **window height**.
-- Both sizes are kept because cabinets must stay a minimum distance from the casing. That distance belongs to the cabinet rules (TBD), not to the opening itself.
+- Both sizes are kept because cabinets must stay clear of the casing (see clearance rules below). The minimum distance is a cabinet rule, not part of the opening.
 - Doors and windows are annotated with a dimension line off the side of the drawing.
 - **Ceiling height** is entered on this tab.
 
@@ -56,46 +56,63 @@ The dimension panel is replaced by a small marker toolbox. Markers drop wherever
 
 ## Tab 3: Lowers
 
-The toolbox holds small **constraint markers** for the auto-fill tool, plus the cabinet drawing pencil. Cabinet runs are drawn like walls: drag a finger along a wall and the app picks the box sizes that fit, using the rules (TBD, see below).
+The toolbox holds small **constraint markers** for the auto-fill tool, plus the cabinet drawing pencil. Cabinet runs are drawn like walls: drag a finger along a wall and the app picks the box sizes that fit, using the rules below.
 
 ### Markers are constraints, not cabinets
 
-A marker is a small dropped symbol. It is **not** a box and is never dragged around to tidy up. When the user drops a marker they are asked for its **width**. Markers do not snap to each other or to walls. Markers in a small cluster (for example a sink marker, a plumbing stub and a window) all count together for whichever cabinet box falls over them.
+A marker is a small dropped symbol. It is **not** a box and is never dragged around to tidy up. Each marker asks for its **width** when dropped. Markers do not snap to each other or to walls. Markers in a small cluster (for example a sink marker, a plumbing stub and a window) all count together for whichever cabinet box falls over them.
 
-| Marker | Asks for | What it constrains |
-|---|---|---|
-| Sink | width | The box over it must be at least that wide (rounded up to the next standard width). Box is centered on the sink, a hard rule. Also centered on a window behind it, a soft rule that becomes firm once the sink marker is there. |
-| Range | width | Takes the full width of one base slot. Needs power or gas nearby (see hookups). |
-| Cooktop | width | Same idea as a range, but over a cabinet. |
-| Oven | width | Wall-oven opening, with the cabinet around it chosen to fit. |
-| Refrigerator | width | Reserves the opening. |
-| Pantry | none | Any cabinet box that intersects it becomes full height (floor to ceiling). |
+Markers: **fridge, range, cooktop, oven, sink, dishwasher, pantry.** Cooktop, oven and range are three separate markers.
 
-Cooktop, oven and range are three different markers.
+When the cabinet tool draws a run across a marker, it turns that marker into a box in the run:
 
-Other behavior:
+| Marker | Result in the run |
+|---|---|
+| Fridge | A **void** box of the marker's width (e.g. F36). A void is drawn in a distinct color with an X through it: it is the absence of a cabinet. It also automatically adds a **fridge panel** beside it, unless the void is against a wall or corner, or a full-height pantry is already next to it. |
+| Dishwasher | A 24" void, same treatment. Must be within 36" of the sink. |
+| Range | A void the width of the marker, taking the whole base slot. (To confirm.) |
+| Sink | A specialty-colored cabinet box at least as wide as the sink marker (rounded up to a standard width), carrying a sink symbol. |
+| Cooktop | A cabinet box with a cooktop symbol. (To confirm.) |
+| Oven | To be confirmed. |
+| Pantry | No box of its own: any cabinet box that intersects it becomes full height (floor to ceiling). |
 
-- **Dishwasher** is a standard 24" and is auto-placed like a cabinet by rule. It must be within 36" of the sink.
-- **Hookup rule** for range, cooktop and fridge:
-  - If the marker is **touching a power or gas marker when dropped**, auto-fill may not shift it off.
-  - If it was **not touching one**, auto-fill may shift it anywhere within the run, within reason, to get a better layout.
-  - If no power or gas marker is near it, placement is allowed but flagged with a small **"No hookups marked"** note (the user may be working from plans before rough-in, or the client needs to know).
-- Specialty cabinets (placed like markers): spice drawer (6" for now, to be confirmed; may also come in 12"), trash pull-out. The list is still open.
+### Sliding and hookups
+
+- A void or box may **slide anywhere in the run** as long as it stays touching its own marker (and the hookup marker it was touching when placed). That is the answer to "how far may an appliance shift."
+- If a fridge, range or cooktop was **already touching** a power or gas marker when dropped, auto-fill may not shift it off that hookup.
+- If it was **not** touching one, auto-fill may move it anywhere in the run, within reason.
+- If no power or gas marker is near it, placement is allowed but a small **"No hookups marked"** note is added. The user may be working from plans before rough-in, or the client needs to know.
+- A sink box must stay touching **both** the sink marker and the plumbing marker, and prefers to be **centered on a window** behind it. Once a sink marker is there, that centering is firm. In practice "centered" means as close to centered as standard sizes allow.
 
 ### Worked example (priority rules)
 
-A 51" wall run has a window in the middle with a 24" sink marker dropped in front of it. Constraints: a 24" box over the sink, and centered as closely as possible. With 51" total, that box can't be perfectly centered with clean sizes on both sides, so the app may choose 18" on one side and 9" on the other, since that keeps the sink box close to center with standard widths. This means:
+A 51" wall run has a window in the middle and a 24" sink marker in front of it. Constraints: a 24" sink box, centered on the window as closely as possible. With 51" total, that box can't be perfectly centered with clean sizes on both sides, so the app may choose 18" on one side and 9" on the other. The sink box sits about 4 1/2" off center because standard widths allow nothing closer.
 
-- "Centered" really means **as close to centered as standard sizes allow**.
-- The rules need an explicit priority order (hard constraints first: minimum sink box, hookups touched; then centering; then clean widths and fewest boxes).
-- Priority order is to be defined in the rules dump.
+Suggested priority order (to confirm): hard constraints first (sink box minimum width, touching required markers, casing clearance), then centering on the window, then clean standard widths and the fewest boxes.
+
+### Clearances (lowers)
+
+- Cabinets stay at least **1"** from door and window casing (default; adjustable).
+- Lowers respect window casing **only if the sill is under 36"**. A window with a sill of 36" or higher is ignored by lowers.
+- Leftover widths at the end of a run are shown, so the user can decide what fits (a filler, a spice rack, etc.). There is no specialty-cabinet toolbox: odd items are the user's call in the catalog.
+
+### Islands
+
+- Boxes may be drawn off walls, for islands and peninsulas. They prefer to snap to a wall when near one.
+- Once cabinets exist, the app shows **red constraint zones** where more cannot go (for example an island must be at least 36" from other cabinets). This makes it easy to show a client that their island does not fit.
 
 ## Tab 4: Uppers
 
 - Same drag-along-the-wall drawing as Lowers, with a ghost of the lowers underneath so runs line up.
 - The user annotates the **upper height** wanted (for example 42" uppers, or 96" going to the ceiling).
 - Pantry markers carry over from the lowers.
-- A **crown / light rail toggle**, which changes how the uppers behave (spacing and heights), is the one tool on this tab. Exact effects to be defined in the rules.
+- Two number inputs, **Crown** and **Light rail**, both default to **0** (meaning none). They are annotated on the drawing so the user remembers the client wants them.
+- Any nonzero value adds clearance: the end of an upper run needs that much extra room so the molding does not clip a window, vent hood, etc. If both are filled in, the **larger** value is used for clearance. Typical values (to be confirmed): light rail 1 to 2", crown 3 to 4".
+- The casing minimum (1") and the crown/light rail clearance apply to uppers on top of each other where relevant.
+
+## Settings
+
+A small settings page may hold defaults the user can adjust: casing clearance (1"), the 36" window sill threshold, island clearance (36"), and default crown and light rail values.
 
 ## Output
 
@@ -109,10 +126,9 @@ A 51" wall run has a window in the middle with a 24" sink marker dropped in fron
 
 ## Open questions
 
-- Cabinet-fill rules: standard widths by type, corner handling (blind, lazy Susan, diagonal), filler preferences, symmetry around the sink and range.
-- Exact spice-drawer widths (6" vs. 12").
-- Full list of specialty cabinets.
-- How far an appliance may shift during auto-fill ("within reason").
-- Minimum cabinet distance from door and window casing.
-- What the crown / light rail toggle changes.
-- Priority order for conflicting constraints.
+- Cabinet-fill rules: standard widths by type, corner handling (blind, lazy Susan, diagonal), filler preferences.
+- Whether the range is a void and the cooktop and oven behave as drawn above.
+- Whether a dishwasher is auto-added when only a sink marker is placed, or only when its marker is dropped.
+- Confirm the priority order for conflicting constraints.
+- Exact crown and light rail values (user will measure), and whether they are set per job or in settings.
+- Full set of clearance rules (island 36" and others).
