@@ -64,22 +64,18 @@ A marker is a small dropped symbol. It is **not** a box and is never dragged aro
 
 Markers: **fridge, range, cooktop, oven, sink, dishwasher, pantry.** Cooktop, oven and range are three separate markers.
 
-When the cabinet tool draws a run across a marker, it turns that marker into a box in the run:
+When the cabinet tool draws a run across a marker, it turns that marker into a box in the run. Markers fall into three groups:
 
-| Marker | Result in the run |
-|---|---|
-| Fridge | A **void** box of the marker's width (e.g. F36). A void is drawn in a distinct color with an X through it: it is the absence of a cabinet. It also automatically adds a **fridge panel** beside it, unless the void is against a wall or corner, or a full-height pantry is already next to it. |
-| Dishwasher | A 24" void, same treatment. Must be within 36" of the sink. |
-| Range | A void the width of the marker, taking the whole base slot. (To confirm.) |
-| Sink | A specialty-colored cabinet box at least as wide as the sink marker (rounded up to a standard width), carrying a sink symbol. |
-| Cooktop | A cabinet box with a cooktop symbol. (To confirm.) |
-| Oven | To be confirmed. |
-| Pantry | No box of its own: any cabinet box that intersects it becomes full height (floor to ceiling). |
+| Group | Markers | Behavior |
+|---|---|---|
+| **Fixed void** | Dishwasher, range | Where one of these sits, no cabinet can go. Its width is fixed: a 24" dishwasher gets exactly 24", a 36" range exactly 36", no more, no less. Drawn as a distinct color with an X through it (the absence of a cabinet). May need end panels. A dishwasher must be within 36" of the sink. |
+| **Fixed full-height** | Fridge, oven, pantry | Treated as a full-height (pantry) cabinet in **both** the lowers and uppers layers. Fixed width: a 36" oven means a 36" pantry cabinet. A fridge adds a **fridge panel** beside it unless it is against a wall or corner, or next to a full-height pantry. If the user wants a fridge cabinet above, they set the fridge width to the width of that cabinet. There is no separate "fridge cabinet" marker. If an oven only goes below, the user changes that in Syncly. |
+| **Flexible box** | Sink, cooktop | A specialty-colored cabinet box carrying the symbol, at least as wide as the marker. The box may be larger if that fits the rules better: a 24" sink can sit in a 27" box. |
 
 ### Sliding and hookups
 
-- A void or box may **slide anywhere in the run** as long as it stays touching its own marker (and the hookup marker it was touching when placed). That is the answer to "how far may an appliance shift."
-- If a fridge, range or cooktop was **already touching** a power or gas marker when dropped, auto-fill may not shift it off that hookup.
+- A void, full-height or box may **slide anywhere in the run** as long as it stays touching its own marker (and the hookup marker it was touching when placed). That is the answer to "how far may an appliance shift."
+- If a fridge, range, oven or cooktop was **already touching** a power or gas marker when dropped, auto-fill may not shift it off that hookup.
 - If it was **not** touching one, auto-fill may move it anywhere in the run, within reason.
 - If no power or gas marker is near it, placement is allowed but a small **"No hookups marked"** note is added. The user may be working from plans before rough-in, or the client needs to know.
 - A sink box must stay touching **both** the sink marker and the plumbing marker, and prefers to be **centered on a window** behind it. Once a sink marker is there, that centering is firm. In practice "centered" means as close to centered as standard sizes allow.
@@ -106,13 +102,13 @@ Suggested priority order (to confirm): hard constraints first (sink box minimum 
 - Same drag-along-the-wall drawing as Lowers, with a ghost of the lowers underneath so runs line up.
 - The user annotates the **upper height** wanted (for example 42" uppers, or 96" going to the ceiling).
 - Pantry markers carry over from the lowers.
-- Two number inputs, **Crown** and **Light rail**, both default to **0** (meaning none). They are annotated on the drawing so the user remembers the client wants them.
+- Two number inputs in the corner of the drawing, **Crown** and **Light rail**, are set **per drawing** and both default to **0** (meaning none). They are annotated on the drawing so the user remembers the client wants them.
 - Any nonzero value adds clearance: the end of an upper run needs that much extra room so the molding does not clip a window, vent hood, etc. If both are filled in, the **larger** value is used for clearance. Typical values (to be confirmed): light rail 1 to 2", crown 3 to 4".
-- The casing minimum (1") and the crown/light rail clearance apply to uppers on top of each other where relevant.
+- The 1" casing minimum and the crown/light rail clearance both apply to uppers.
 
-## Settings
+## App defaults
 
-A small settings page may hold defaults the user can adjust: casing clearance (1"), the 36" window sill threshold, island clearance (36"), and default crown and light rail values.
+There is no settings page. Anything not set per drawing is a fixed default in the app: casing clearance (1"), the 36" window sill threshold, island clearance (36"), and standard cabinet widths. These can be changed in code if needed.
 
 ## Output
 
@@ -127,8 +123,8 @@ A small settings page may hold defaults the user can adjust: casing clearance (1
 ## Open questions
 
 - Cabinet-fill rules: standard widths by type, corner handling (blind, lazy Susan, diagonal), filler preferences.
-- Whether the range is a void and the cooktop and oven behave as drawn above.
+- Range: it was described both as a fixed void ("36" range needs exactly 36"") and as able to drop into a 39" box. Which is it?
 - Whether a dishwasher is auto-added when only a sink marker is placed, or only when its marker is dropped.
 - Confirm the priority order for conflicting constraints.
-- Exact crown and light rail values (user will measure), and whether they are set per job or in settings.
+- Exact crown and light rail values (user will measure).
 - Full set of clearance rules (island 36" and others).
