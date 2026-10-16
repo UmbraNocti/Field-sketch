@@ -51,3 +51,7 @@ The simplest way is GitHub Pages: in the repository settings, set Pages to deplo
 - `src/store.js`: sketch state, undo, local save
 - `src/render.js`, `src/panel.js`, `src/main.js`: drawing, side panel, input
 - `tests/`: unit tests and the browser smoke test
+
+## License
+
+GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later). You're free to use, change and share it. If you run a modified version as an online service, you must offer its users the source code. See [LICENSE](LICENSE).
