@@ -1,6 +1,6 @@
 # Field-sketch: Design Notes
 
-Status: brainstorm captured, no code yet. Cabinet-fill rules (standard widths, corners, fillers) and the conflict priority order are still to come.
+Status: brainstorm captured, no code yet. First-pass cabinet rules are recorded below (from memory; to be refined against the catalogs).
 
 ## Purpose
 
@@ -70,7 +70,7 @@ When the cabinet tool draws a run across a marker, it turns that marker into a b
 |---|---|---|
 | **Fixed void** | Dishwasher, range | Where one of these sits, no cabinet can go. Its width is fixed: a 24" dishwasher gets exactly 24", a 36" range exactly 36", no more, no less. Drawn as a distinct color with an X through it (the absence of a cabinet). May need end panels. A dishwasher must be within 36" of the sink. |
 | **Fixed full-height** | Fridge, oven, pantry | Treated as a full-height (pantry) cabinet in **both** the lowers and uppers layers. Fixed width: a 36" oven means a 36" pantry cabinet. A fridge adds a **fridge panel** beside it unless it is against a wall or corner, or next to a full-height pantry. If the user wants a fridge cabinet above, they set the fridge width to the width of that cabinet. There is no separate "fridge cabinet" marker. If an oven only goes below, the user changes that in Syncly. |
-| **Flexible box** | Sink, cooktop | A specialty-colored cabinet box carrying the symbol, at least as wide as the marker. The box may be larger if that fits the rules better: a 24" sink can sit in a 27" box. |
+| **Flexible box** | Sink, cooktop | A specialty-colored cabinet box carrying the symbol, at least as wide as the marker (larger, never smaller). The box may be larger if that fits the rules better: a 24" sink can sit in a 27" box. |
 
 ### Sliding and hookups
 
@@ -84,7 +84,25 @@ When the cabinet tool draws a run across a marker, it turns that marker into a b
 
 A 51" wall run has a window in the middle and a 24" sink marker in front of it. Constraints: a 24" sink box, centered on the window as closely as possible. With 51" total, that box can't be perfectly centered with clean sizes on both sides, so the app may choose 18" on one side and 9" on the other. The sink box sits about 4 1/2" off center because standard widths allow nothing closer.
 
-Suggested priority order (to confirm): hard constraints first (sink box minimum width, touching required markers, casing clearance), then centering on the window, then clean standard widths and the fewest boxes.
+### Priority order (confirmed)
+
+When constraints conflict, the auto-fill resolves them in this order:
+
+1. **Hard constraints**: fixed widths, required marker contact, minimum box widths, casing clearance.
+2. **Centering** (for example the sink box on a window).
+3. **Clean widths**: standard sizes only.
+4. **Symmetry** across the run.
+5. **Fewest boxes.**
+
+### Standard widths and corners (first pass)
+
+- Standard base widths run from **15" to 42" in 3" steps** (15, 18, 21, 24, 27, 30, 33, 36, 39, 42). 12" may be added after checking the catalog. 42" is the largest size used, and the priority order should rarely reach for it.
+- **Corners are always a blind corner cabinet by default.** Tapping a corner cabinet cycles through every available option that fits. The list of corner options and dimensions is to be added later from the catalog.
+- Anything else (lazy Susan, diagonal, etc.) is the user's call in Syncly.
+
+### Missing-item notes
+
+The app does not auto-add a dishwasher. If none has been marked, a note somewhere visible says **"No dishwasher"**, like the "No hookups marked" note, so the user and client both see it.
 
 ### Clearances (lowers)
 
@@ -122,9 +140,8 @@ There is no settings page. Anything not set per drawing is a fixed default in th
 
 ## Open questions
 
-- Cabinet-fill rules: standard widths by type, corner handling (blind, lazy Susan, diagonal), filler preferences.
-- Range: it was described both as a fixed void ("36" range needs exactly 36"") and as able to drop into a 39" box. Which is it?
-- Whether a dishwasher is auto-added when only a sink marker is placed, or only when its marker is dropped.
-- Confirm the priority order for conflicting constraints.
+- Corner cabinet options and dimensions (to add from the catalog).
+- Whether 12" is a standard width (check the catalog).
 - Exact crown and light rail values (user will measure).
 - Full set of clearance rules (island 36" and others).
+- Upper cabinet widths and heights (assumed to follow the same width steps for now).
