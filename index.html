@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Field Sketch">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>Field Sketch</title>
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <h1>Field Sketch</h1>
+      <div class="bar-actions">
+        <button id="undo" class="bar-btn" aria-label="Undo">↶<span class="word"> Undo</span></button>
+        <button id="redo" class="bar-btn" aria-label="Redo">↷<span class="word"> Redo</span></button>
+        <button id="fit" class="bar-btn" aria-label="Fit to screen">Fit</button>
+        <button id="new" class="bar-btn" aria-label="New sketch">New</button>
+      </div>
+    </header>
+    <main id="stage">
+      <div id="canvasWrap">
+        <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+          <g id="scene"></g>
+          <polyline id="preview" points=""></polyline>
+        </svg>
+        <div id="hint"></div>
+        <div id="empty" hidden>
+          <svg viewBox="0 0 120 80" width="120" height="80" aria-hidden="true"><path d="M14 66V14h70l22 22v30Z" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="7 6" stroke-linejoin="round"/><circle cx="14" cy="66" r="5" fill="currentColor"/></svg>
+          <p>Draw the room outline</p>
+        </div>
+        <div id="toast" role="status"></div>
+      </div>
+      <aside id="panel"></aside>
+    </main>
+    <div id="tray"></div>
+    <nav id="tabs"></nav>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

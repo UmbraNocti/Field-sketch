@@ -1,6 +1,6 @@
 # Field-sketch: Design Notes
 
-Status: brainstorm captured, no code yet. First-pass cabinet rules are recorded below (from memory; to be refined against the catalogs).
+Status: the Walls and Markings tabs are built (see the README). Lowers and Uppers are not built yet. First-pass cabinet rules are recorded below (from memory; to be refined against the catalogs).
 
 ## Purpose
 
@@ -17,6 +17,16 @@ Primary user: a cabinet specialist at 84 Lumber (Knoxville). Main lines sold: 19
 - Never block the user. Missing information is flagged with color and small annotations, not modal errors.
 - Measurements are entered in inches, rounded to the nearest 1/8", on a numeric-only keypad. No laser measure (dropped).
 - No gestures. Multi-finger gestures conflict with iPadOS, so tools are chosen from a pencil tray.
+
+## As built so far (Walls and Markings)
+
+- A room is drawn in **one stroke**. Drawing again replaces it (undoable).
+- Door pencil: two lines across a wall make an opening; one arc (latch end on the wall, free end out from the hinge) makes a door with its swing. An arc over an existing door resets its swing.
+- Window pencil: two lines across a wall.
+- Open-wall pencil: a scribble or swipe toggles a wall between wall and construction line. Doors and windows on a wall that becomes open are removed (undoable).
+- Entered wall lengths are kept exactly. Walls without a number are adjusted just enough to close the loop. If the entered numbers can't close it, the gap is shown instead of being hidden.
+- Markers are free-placed, draggable and deletable. Columns ask for width and depth.
+- The sketch autosaves in the browser and works offline once loaded.
 
 ## Layout
 
