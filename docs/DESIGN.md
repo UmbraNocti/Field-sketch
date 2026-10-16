@@ -38,8 +38,9 @@ Pencils:
 Dimensions:
 
 - The panel prompts for every wall length. All can be skipped, but missing ones are color-coded.
-- Doors prompt for **rough opening** and **casing-to-casing**, plus the left and right clearance to adjacent features.
-- Windows prompt for **rough opening** and **casing-to-casing**, plus **sill height** and **window height**, and left/right clearance.
+- Doors prompt for **rough opening** and **casing-to-casing**.
+- Windows prompt for **rough opening** and **casing-to-casing**, plus **sill height** and **window height**.
+- Both sizes are kept because cabinets must stay a minimum distance from the casing. That distance belongs to the cabinet rules (TBD), not to the opening itself.
 - Doors and windows are annotated with a dimension line off the side of the drawing.
 - **Ceiling height** is entered on this tab.
 
@@ -55,31 +56,46 @@ The dimension panel is replaced by a small marker toolbox. Markers drop wherever
 
 ## Tab 3: Lowers
 
-The toolbox holds appliance and specialty markers. Cabinet runs are drawn like walls: drag a finger along a wall and the app auto-selects the box sizes that fit, using the rules (TBD, see below).
+The toolbox holds small **constraint markers** for the auto-fill tool, plus the cabinet drawing pencil. Cabinet runs are drawn like walls: drag a finger along a wall and the app picks the box sizes that fit, using the rules (TBD, see below).
 
-Appliance markers (these decide what cabinet goes under or around them):
+### Markers are constraints, not cabinets
 
-- Refrigerator
-- Range
-- Oven
-- Cooktop
-- Pantry (see below)
-- Sink (asks for the sink size, which sets the minimum cabinet size under it)
+A marker is a small dropped symbol. It is **not** a box and is never dragged around to tidy up. When the user drops a marker they are asked for its **width**. Markers do not snap to each other or to walls. Markers in a small cluster (for example a sink marker, a plumbing stub and a window) all count together for whichever cabinet box falls over them.
+
+| Marker | Asks for | What it constrains |
+|---|---|---|
+| Sink | width | The box over it must be at least that wide (rounded up to the next standard width). Box is centered on the sink, a hard rule. Also centered on a window behind it, a soft rule that becomes firm once the sink marker is there. |
+| Range | width | Takes the full width of one base slot. Needs power or gas nearby (see hookups). |
+| Cooktop | width | Same idea as a range, but over a cabinet. |
+| Oven | width | Wall-oven opening, with the cabinet around it chosen to fit. |
+| Refrigerator | width | Reserves the opening. |
+| Pantry | none | Any cabinet box that intersects it becomes full height (floor to ceiling). |
+
+Cooktop, oven and range are three different markers.
 
 Other behavior:
 
 - **Dishwasher** is a standard 24" and is auto-placed like a cabinet by rule. It must be within 36" of the sink.
-- **Pantry marker**: any cabinet that intersects it becomes full height (floor to ceiling). It is a marker, not a drawn cabinet.
-- **Appliances snap to walls** like cabinets. They do not snap to hookup markers.
-- **Hookup check**: a range or fridge needs a power or gas marker touching or near it (a loose collision zone). If none is there, placement is still allowed, but a small annotation says **"No hookups marked"**. The user may be working from plans before rough-in, or the client needs to be told.
-- **Appliances may shift slightly** if that gives a better cabinet layout. For example, a 36" range marker can move a little so the runs on each side come out in clean sizes.
+- **Hookup rule** for range, cooktop and fridge:
+  - If the marker is **touching a power or gas marker when dropped**, auto-fill may not shift it off.
+  - If it was **not touching one**, auto-fill may shift it anywhere within the run, within reason, to get a better layout.
+  - If no power or gas marker is near it, placement is allowed but flagged with a small **"No hookups marked"** note (the user may be working from plans before rough-in, or the client needs to know).
 - Specialty cabinets (placed like markers): spice drawer (6" for now, to be confirmed; may also come in 12"), trash pull-out. The list is still open.
+
+### Worked example (priority rules)
+
+A 51" wall run has a window in the middle with a 24" sink marker dropped in front of it. Constraints: a 24" box over the sink, and centered as closely as possible. With 51" total, that box can't be perfectly centered with clean sizes on both sides, so the app may choose 18" on one side and 9" on the other, since that keeps the sink box close to center with standard widths. This means:
+
+- "Centered" really means **as close to centered as standard sizes allow**.
+- The rules need an explicit priority order (hard constraints first: minimum sink box, hookups touched; then centering; then clean widths and fewest boxes).
+- Priority order is to be defined in the rules dump.
 
 ## Tab 4: Uppers
 
 - Same drag-along-the-wall drawing as Lowers, with a ghost of the lowers underneath so runs line up.
 - The user annotates the **upper height** wanted (for example 42" uppers, or 96" going to the ceiling).
 - Pantry markers carry over from the lowers.
+- A **crown / light rail toggle**, which changes how the uppers behave (spacing and heights), is the one tool on this tab. Exact effects to be defined in the rules.
 
 ## Output
 
@@ -96,5 +112,7 @@ Other behavior:
 - Cabinet-fill rules: standard widths by type, corner handling (blind, lazy Susan, diagonal), filler preferences, symmetry around the sink and range.
 - Exact spice-drawer widths (6" vs. 12").
 - Full list of specialty cabinets.
-- How far an appliance may shift during auto-fill.
-- Whether the sink marker should place the sink base automatically, and how plumbing markers relate to it.
+- How far an appliance may shift during auto-fill ("within reason").
+- Minimum cabinet distance from door and window casing.
+- What the crown / light rail toggle changes.
+- Priority order for conflicting constraints.
