@@ -15,7 +15,7 @@ export const FIELD_LABELS = {
 };
 
 export function openingFields(kind) {
-  return kind === 'window' ? ['ro', 'cc', 'pos', 'sill', 'h'] : ['ro', 'cc'];
+  return kind === 'window' ? ['ro', 'cc', 'pos', 'sill', 'h'] : ['ro', 'cc', 'pos'];
 }
 
 export function blankState() {

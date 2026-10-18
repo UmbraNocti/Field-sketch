@@ -49,9 +49,9 @@ Pencils:
 Dimensions:
 
 - The panel prompts for every wall length. All can be skipped, but missing ones are color-coded.
-- Doors prompt for **rough opening** and **casing-to-casing**.
+- Doors prompt for **rough opening**, **casing-to-casing** and **position** (same as windows below).
 - Windows prompt for **rough opening** and **casing-to-casing**, plus **position**, **sill height** and **window height**.
-- **Position** is how far the window's rough opening sits from the nearest wall corner or the neighbouring opening, chosen when the window is drawn. It is measured to the rough-opening edge and labeled on the drawing (for example "30 to Door 1"). Once entered, the window is placed exactly there and stays put if the wall length changes.
+- **Position** (doors and windows) is how far the opening sits from the nearest wall corner or the neighbouring opening, chosen when the opening is drawn. It is measured to the rough-opening edge and labeled on the drawing (for example "30 to Door 1"). Once entered, the opening is placed exactly there and stays put if the wall length changes.
 - Both sizes are kept because cabinets must stay clear of the casing (see clearance rules below). The minimum distance is a cabinet rule, not part of the opening.
 - Doors and windows are annotated with a dimension line off the side of the drawing.
 - **Ceiling height** is entered on this tab.

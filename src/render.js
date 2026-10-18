@@ -191,16 +191,19 @@ export function renderScene({ state, derived, view, ui }) {
         const act = activeIs(ui, 'opening', 'id', op.id) && ui.active.field === dm.key ? ' active' : '';
         out += label(mid.x, mid.y, `${dm.prefix} ${miss ? '?' : formatInches(dm.val, { quote: false })}`, (miss ? 'missing' : '') + act, ang);
       }
-      if (op.kind === 'window') {
+      {
+        // Position from the nearest corner or neighbouring opening. Windows keep their sill/height
+        // line closer in, so theirs sits further out; doors sit just outside the casing line.
+        const posOff = op.kind === 'window' ? 88 : 64;
         const pi = positionInfo(room, derived, op);
         const edgeU = pi.side === 'before' ? u0 : u1;
         const A = S(add(f.a, f.d, pi.anchorU));
         const E = S(add(f.a, f.d, edgeU));
         const miss = op.pos == null;
-        const pa = add(A, out_n, 88);
-        const pe = add(E, out_n, 88);
-        out += line(add(A, out_n, 8), add(A, out_n, 94), 'dim-line');
-        out += line(add(E, out_n, 8), add(E, out_n, 94), 'dim-line');
+        const pa = add(A, out_n, posOff);
+        const pe = add(E, out_n, posOff);
+        out += line(add(A, out_n, 8), add(A, out_n, posOff + 6), 'dim-line');
+        out += line(add(E, out_n, 8), add(E, out_n, posOff + 6), 'dim-line');
         out += line(pa, pe, 'dim-line' + (miss ? ' dashed' : ''));
         const pm = { x: (pa.x + pe.x) / 2, y: (pa.y + pe.y) / 2 };
         const act = activeIs(ui, 'opening', 'id', op.id) && ui.active.field === 'pos' ? ' active' : '';

@@ -88,7 +88,7 @@ function resetView() {
 }
 
 // Callouts for doors and windows stand this many px outside their wall, so the fit leaves room.
-const CALLOUT_PX = { door: 70, window: 108 };
+const CALLOUT_PX = { door: 84, window: 108 };
 
 function fitView() {
   const state = store.get();

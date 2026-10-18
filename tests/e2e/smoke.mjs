@@ -112,6 +112,19 @@ await type('36');
 await next();
 await type('40');
 await next();
+await type('12');
+await next();
+s = await S();
+check('door stores position too', s.room.openings[0].pos === 12);
+const doorSpan = await page.evaluate(async () => {
+  const m = await import('./src/store.js');
+  const st = window.__fieldsketch.store.get();
+  const d = m.deriveRoom(st.room);
+  const op = st.room.openings[0];
+  const sp = d.spans.get(op.id);
+  return { span: sp, side: op.ref.side, id: op.ref.id };
+});
+check('door sits exactly 12 from its corner', doorSpan.id === null && Math.abs((doorSpan.side === 'before' ? doorSpan.span[0] : 144.125 - doorSpan.span[1]) - 12) < 1e-6);
 
 // --- window: two lines across the right wall ---
 await page.click('.pencil[data-tool="window"]');
