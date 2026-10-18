@@ -214,8 +214,8 @@ test('a cooktop gets the same blank hood place as a range, as wide as the cookto
   near((hood.u0 + hood.u1) / 2, (box.u0 + box.u1) / 2);
   assert.match(hood.label, /^HOOD 30/);
   near(upper.runs[0].boxes.reduce((t, b) => t + b.size, 0), 156);
-  // The cooktop itself never shows up as a box in the uppers.
-  assert.ok(!upper.runs[0].boxes.some((b) => b.type === 'cooktop'));
+  // The cooktop itself never shows up as a cabinet in the uppers, only the blank hood place.
+  assert.ok(!upper.runs[0].boxes.some((b) => b.kind === 'flex' || /^CB/.test(b.label)));
 });
 
 test('a dishwasher that ends the cabinets gets an end panel on that side; a range never does', () => {
