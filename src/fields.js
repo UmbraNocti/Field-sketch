@@ -1,7 +1,7 @@
 // The numbers the app asks for, addressed as "fields": a wall length, an opening size, the
 // ceiling height, or a column size. The keypad edits one field at a time.
 import { FIELD_LABELS, openingFields } from './store.js';
-import { openingTitle } from './render.js';
+import { openingTitle, refLabel } from './render.js';
 
 export const sameField = (a, b) =>
   !!a && !!b && a.kind === b.kind && a.i === b.i && a.id === b.id && a.field === b.field;
@@ -57,7 +57,9 @@ export function fieldTitle(state, f) {
       return `Wall ${f.i + 1} length`;
     case 'opening': {
       const op = findOpening(state, f.id);
-      return op ? `${openingTitle(state.room, op)} · ${FIELD_LABELS[f.field]}` : '';
+      if (!op) return '';
+      if (f.field === 'pos') return `${openingTitle(state.room, op)} · Position, to ${refLabel(state.room, op)}`;
+      return `${openingTitle(state.room, op)} · ${FIELD_LABELS[f.field]}`;
     }
     case 'ceiling':
       return 'Ceiling height';

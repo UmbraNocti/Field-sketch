@@ -25,9 +25,11 @@ It's a static web app with no build step and no accounts. Everything is saved in
 - **Open wall:** scribble or swipe along a wall to turn it into a construction line. Do it again to restore it.
 - Tap a wall or an opening to enter its dimensions. The keypad takes inches and eighths. **Next** walks through whatever is still missing.
 - Missing numbers are orange, entered ones are green. If the measured walls don't close, the panel says how far off they are.
-- Doors and windows ask for **rough opening** and **casing to casing**. Windows also ask for **sill height** and **window height**. Ceiling height is at the top of the panel.
+- Doors and windows ask for **rough opening** and **casing to casing**. Windows also ask for **position** (distance from the nearest corner or neighbouring opening to the window's rough opening), **sill height** and **window height**. Ceiling height is at the top of the panel.
 
-**Markings tab:** pick a marker, tap the sketch to place it, drag to move it. Columns ask for width and depth.
+**Markings tab:** pick a marker (plumbing, 120V outlet, 220V outlet, gas, HVAC vent, column), tap the sketch to place it, drag to move it. Columns ask for width and depth.
+
+**Save and Open:** the top bar's Save writes the sketch to a text file (`name-date.fieldsketch.json`) and Open reads one back. The sketch also autosaves in the browser. Tap the name under the title to rename the sketch.
 
 Pinch to zoom and drag with two fingers to pan. **Fit** re-centers.
 

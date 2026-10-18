@@ -263,3 +263,43 @@ export function openingSpan(op, wallLen) {
   c = Math.max(w / 2, Math.min(wallLen - w / 2, c));
   return [c - w / 2, c + w / 2];
 }
+
+// Spans (inches from the wall start) of every opening on one wall, keyed by opening id.
+// An opening with a position (`pos`) is placed exactly that far from its reference: a corner of
+// the wall or the facing edge of a neighbouring opening. References always point at openings made
+// earlier, so resolving in id order never loops.
+export function computeSpans(ops, wallLen) {
+  const spans = new Map();
+  const sorted = ops.slice().sort((a, b) => a.id - b.id);
+  for (const op of sorted) {
+    const w = Math.min(op.ro != null ? op.ro : op.drawW, wallLen);
+    let u0;
+    if (op.pos != null && op.ref) {
+      const ref = op.ref.id != null ? spans.get(op.ref.id) : null;
+      if (op.ref.side === 'before') u0 = (ref ? ref[1] : 0) + op.pos;
+      else u0 = (ref ? ref[0] : wallLen) - op.pos - w;
+    } else {
+      const c = Math.max(w / 2, Math.min(wallLen - w / 2, op.t * wallLen));
+      u0 = c - w / 2;
+    }
+    u0 = Math.max(0, Math.min(wallLen - w, u0));
+    spans.set(op.id, [u0, u0 + w]);
+  }
+  return spans;
+}
+
+// The closest thing to measure a new opening from: a wall corner or a neighbouring opening.
+export function nearestReference(span, wallLen, others) {
+  let best = { id: null, side: 'before', gap: span[0] };
+  if (wallLen - span[1] < best.gap) best = { id: null, side: 'after', gap: wallLen - span[1] };
+  for (const o of others) {
+    if (o.span[1] <= span[0] + 1e-9) {
+      const gap = span[0] - o.span[1];
+      if (gap < best.gap) best = { id: o.id, side: 'before', gap };
+    } else if (o.span[0] >= span[1] - 1e-9) {
+      const gap = o.span[0] - span[1];
+      if (gap < best.gap) best = { id: o.id, side: 'after', gap };
+    }
+  }
+  return { id: best.id, side: best.side };
+}

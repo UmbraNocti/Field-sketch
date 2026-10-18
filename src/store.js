@@ -1,24 +1,103 @@
 // Sketch state, derived geometry, undo history and local autosave.
-import { solveLengths, buildVerts, signedArea } from './geometry.js';
+import { solveLengths, buildVerts, signedArea, computeSpans, dist } from './geometry.js';
 
 const KEY = 'fieldsketch.v1';
 const HISTORY_LIMIT = 100;
 
-export const MARKER_TYPES = ['plumbing', 'outlet', 'gas', 'vent', 'column'];
+export const MARKER_TYPES = ['plumbing', 'outlet', 'outlet220', 'gas', 'vent', 'column'];
 
 export const FIELD_LABELS = {
   ro: 'Rough opening',
   cc: 'Casing to casing',
+  pos: 'Position',
   sill: 'Sill height',
   h: 'Window height',
 };
 
 export function openingFields(kind) {
-  return kind === 'window' ? ['ro', 'cc', 'sill', 'h'] : ['ro', 'cc'];
+  return kind === 'window' ? ['ro', 'cc', 'pos', 'sill', 'h'] : ['ro', 'cc'];
 }
 
 export function blankState() {
-  return { room: null, markers: [], ceiling: null, nextId: 1 };
+  return { room: null, markers: [], ceiling: null, name: '', nextId: 1 };
+}
+
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+const numOrNull = (v) => (isNum(v) && v > 0 ? v : null);
+
+// Accepts anything that was saved before (browser storage or a file) and returns a clean state,
+// dropping pieces that don't make sense. Returns null if it isn't a sketch at all.
+export function normalizeState(raw) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.markers)) return null;
+  let room = null;
+  if (raw.room) {
+    const r = raw.room;
+    const n = Array.isArray(r.dirs) ? r.dirs.length : 0;
+    const okArr = (a) => Array.isArray(a) && a.length === n;
+    if (
+      n < 3 ||
+      !r.start ||
+      !isNum(r.start.x) ||
+      !isNum(r.start.y) ||
+      !r.dirs.every((d) => Number.isInteger(d) && d >= 0 && d < 8) ||
+      !okArr(r.base) ||
+      !r.base.every((b) => isNum(b) && b > 0)
+    ) {
+      return null;
+    }
+    const openings = [];
+    for (const o of Array.isArray(r.openings) ? r.openings : []) {
+      if (!o || !Number.isInteger(o.id) || !Number.isInteger(o.wall) || o.wall < 0 || o.wall >= n) continue;
+      if (o.kind !== 'door' && o.kind !== 'window') continue;
+      if (!isNum(o.t) || !isNum(o.drawW) || o.drawW <= 0) continue;
+      const swing = o.swing && (o.swing.hinge === 0 || o.swing.hinge === 1) && (o.swing.side === 1 || o.swing.side === -1)
+        ? { hinge: o.swing.hinge, side: o.swing.side }
+        : null;
+      const ref = o.ref && (o.ref.side === 'before' || o.ref.side === 'after')
+        ? { id: Number.isInteger(o.ref.id) ? o.ref.id : null, side: o.ref.side }
+        : { id: null, side: 'before' };
+      openings.push({
+        id: o.id,
+        wall: o.wall,
+        kind: o.kind,
+        t: Math.max(0, Math.min(1, o.t)),
+        drawW: o.drawW,
+        ro: numOrNull(o.ro),
+        cc: numOrNull(o.cc),
+        sill: numOrNull(o.sill),
+        h: numOrNull(o.h),
+        pos: o.pos != null && isNum(o.pos) && o.pos >= 0 ? o.pos : null,
+        ref,
+        swing: o.kind === 'door' ? swing : null,
+      });
+    }
+    room = {
+      start: { x: r.start.x, y: r.start.y },
+      dirs: r.dirs.slice(),
+      base: r.base.slice(),
+      known: r.dirs.map((_, i) => (okArr(r.known) ? numOrNull(r.known[i]) : null)),
+      construction: r.dirs.map((_, i) => !!(okArr(r.construction) && r.construction[i])),
+      openings,
+    };
+  }
+  const markers = [];
+  for (const m of raw.markers) {
+    if (!m || !Number.isInteger(m.id) || !MARKER_TYPES.includes(m.type) || !isNum(m.x) || !isNum(m.y)) continue;
+    const out = { id: m.id, type: m.type, x: m.x, y: m.y };
+    if (m.type === 'column') {
+      out.w = numOrNull(m.w);
+      out.d = numOrNull(m.d);
+    }
+    markers.push(out);
+  }
+  const ids = [...(room ? room.openings.map((o) => o.id) : []), ...markers.map((m) => m.id)];
+  return {
+    room,
+    markers,
+    ceiling: numOrNull(raw.ceiling),
+    name: typeof raw.name === 'string' ? raw.name.slice(0, 80) : '',
+    nextId: Math.max(isNum(raw.nextId) ? Math.floor(raw.nextId) : 1, ...ids.map((i) => i + 1), 1),
+  };
 }
 
 export function newRoom({ start, dirs, base }) {
@@ -38,7 +117,15 @@ export function deriveRoom(room) {
   const verts = buildVerts(room.start, room.dirs, lens);
   const gapLen = Math.hypot(gap.x, gap.y);
   const area = signedArea(verts.slice(0, room.dirs.length));
+  const spans = new Map();
+  for (let i = 0; i < room.dirs.length; i++) {
+    const ops = room.openings.filter((o) => o.wall === i);
+    if (!ops.length) continue;
+    const L = dist(verts[i], verts[i + 1]);
+    for (const [id, span] of computeSpans(ops, L)) spans.set(id, span);
+  }
   return {
+    spans,
     n: room.dirs.length,
     lens,
     verts,
@@ -59,9 +146,7 @@ export function createStore(storage) {
     try {
       const raw = storage && storage.getItem(KEY);
       if (!raw) return null;
-      const s = JSON.parse(raw);
-      if (!s || !Array.isArray(s.markers)) return null;
-      return { ...blankState(), ...s };
+      return normalizeState(JSON.parse(raw));
     } catch {
       return null;
     }
@@ -116,6 +201,14 @@ export function createStore(storage) {
     },
     canUndo: () => undoStack.length > 0,
     canRedo: () => redoStack.length > 0,
+    // Swap in a whole new sketch (opening a file). Undoable.
+    replace(next) {
+      undoStack.push(snapshot());
+      redoStack.length = 0;
+      state = next;
+      persist();
+      notify();
+    },
     reset() {
       undoStack.push(snapshot());
       redoStack.length = 0;

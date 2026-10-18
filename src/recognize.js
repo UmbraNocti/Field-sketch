@@ -8,7 +8,6 @@ import {
   distToLine,
   closestOnSegment,
   segIntersect,
-  openingSpan,
 } from './geometry.js';
 
 function turnAngle(a, b, c) {
@@ -82,11 +81,12 @@ export function hitWall(p, frames, tol) {
   return best;
 }
 
-export function hitOpening(p, frames, openings, tol) {
+export function hitOpening(p, frames, openings, tol, spans) {
   for (const op of openings) {
     const f = frames[op.wall];
-    if (!f) continue;
-    const [u0, u1] = openingSpan(op, f.L);
+    const span = spans.get(op.id);
+    if (!f || !span) continue;
+    const [u0, u1] = span;
     const c = closestOnSegment(p, f.a, f.b);
     const u = c.t * f.L;
     if (c.d <= tol * 1.5 && u >= u0 - tol && u <= u1 + tol) return op;

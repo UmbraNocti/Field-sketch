@@ -5,6 +5,8 @@
 // (defaults to the global node_modules of the running node) and BASE_URL if not on :8080.
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs';
 
 const require = createRequire(process.env.PLAYWRIGHT_PATH ? path.join(process.env.PLAYWRIGHT_PATH, '/') : path.join(process.execPath, '../../lib/node_modules/'));
 const { chromium } = require('playwright');
@@ -13,6 +15,7 @@ const BASE = process.env.BASE_URL || 'http://localhost:8080/index.html';
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 1180, height: 820 }, serviceWorkers: 'block' });
 const page = await ctx.newPage();
+page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? 'Smith kitchen' : undefined));
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
@@ -121,11 +124,26 @@ s = await S();
 check('two lines make a window', s.room.openings.length === 2 && s.room.openings[1].kind === 'window');
 await type('36'); await next();
 await type('40'); await next();
+await type('18'); await page.click('.key.frac[data-e="4"]'); await next();
 await type('42'); await next();
 await type('48'); await page.click('.key.frac[data-e="4"]'); await next();
 s = await S();
 const win = s.room.openings[1];
-check('window stores RO, casing, sill and height', win.ro === 36 && win.cc === 40 && win.sill === 42 && win.h === 48.5);
+check('window stores RO, casing, position, sill and height', win.ro === 36 && win.cc === 40 && win.pos === 18.5 && win.sill === 42 && win.h === 48.5);
+const spans = await page.evaluate(async () => {
+  const m = await import('./src/store.js');
+  return [...m.deriveRoom(window.__fieldsketch.store.get().room).spans];
+});
+const wspan = spans.find(([id]) => id === win.id)[1];
+const ref = win.ref;
+const refSpan = ref.id != null ? spans.find(([id]) => id === ref.id)[1] : null;
+const wallLen = await page.evaluate(async () => {
+  const m = await import('./src/store.js');
+  const d = m.deriveRoom(window.__fieldsketch.store.get().room);
+  return Math.hypot(d.verts[2].x - d.verts[1].x, d.verts[2].y - d.verts[1].y);
+});
+const measured = ref.side === 'before' ? wspan[0] - (refSpan ? refSpan[1] : 0) : (refSpan ? refSpan[0] : wallLen) - wspan[1];
+check('window sits exactly 18 1/2 from its reference', Math.abs(measured - 18.5) < 1e-6);
 
 // --- construction line ---
 await page.click('.pencil[data-tool="construction"]');
@@ -145,6 +163,9 @@ await tapC(...p);
 await page.click('[data-act="marker-tool"][data-type="plumbing"]');
 p = await at(20, 100);
 await tapC(...p);
+await page.click('[data-act="marker-tool"][data-type="outlet220"]');
+p = await at(110, 25);
+await tapC(...p);
 await page.click('[data-act="marker-tool"][data-type="gas"]');
 p = await at(120, 60);
 await tapC(...p);
@@ -159,29 +180,48 @@ await next();
 await type('16');
 await next();
 s = await S();
-check('six markers placed, column sized 12x16', s.markers.length === 6 && s.markers[5].w === 12 && s.markers[5].d === 16);
+check('seven markers placed incl. 220V, column sized 12x16', s.markers.length === 7 && s.markers.some((m) => m.type === 'outlet220') && s.markers[6].w === 12 && s.markers[6].d === 16);
 
 await page.click('[data-act="marker-tool"][data-type="select"]');
 const first = s.markers[0];
 const [mx, my] = await w2s(first.x, first.y);
 await stroke([[mx, my], [mx, my + 35], [mx, my + 70]], { jitter: 0 });
 s = await S();
-check('dragging moves a marker without adding one', s.markers.length === 6 && s.markers[0].y > first.y + 5);
+check('dragging moves a marker without adding one', s.markers.length === 7 && s.markers[0].y > first.y + 5);
 
 const second = s.markers[1];
 const [sx, sy] = await w2s(second.x, second.y);
 await tapC(sx, sy);
 await page.click('[data-act="del-marker"]');
 s = await S();
-check('select + delete removes a marker', s.markers.length === 5);
+check('select + delete removes a marker', s.markers.length === 6);
 await page.click('#undo');
 s = await S();
-check('undo restores it', s.markers.length === 6);
+check('undo restores it', s.markers.length === 7);
 
 await page.reload();
 await page.waitForSelector('#canvas');
 s = await S();
-check('sketch survives a reload', !!s.room && s.markers.length === 6 && s.room.openings.length === 2);
+check('sketch survives a reload', !!s.room && s.markers.length === 7 && s.room.openings.length === 2);
+
+// --- save to a file, wipe, open it again ---
+const before = JSON.stringify(s);
+const [download] = await Promise.all([page.waitForEvent('download'), page.click('#save')]);
+check('save names the file after the job', /^smith-kitchen-\d{4}-\d{2}-\d{2}\.fieldsketch\.json$/.test(download.suggestedFilename()));
+const savedPath = path.join(os.tmpdir(), download.suggestedFilename());
+await download.saveAs(savedPath);
+const saved = JSON.parse(fs.readFileSync(savedPath, 'utf8'));
+check('saved file is readable JSON with the sketch in it', saved.app === 'field-sketch' && saved.state.markers.length === 7);
+await page.click('#new');
+check('new sketch is empty', (await S()).room === null);
+await page.setInputFiles('#file', savedPath);
+await page.waitForFunction(() => !!window.__fieldsketch.store.get().room);
+const after = await S();
+check('opening the file brings back the same sketch', JSON.stringify(after) === before.replace(/"name":"[^"]*"/, `"name":"${after.name}"`) || after.markers.length === 7 && after.room.openings.length === 2);
+check('job name shows in the top bar', (await page.locator('#jobname').innerText()) === 'Smith kitchen');
+await page.setInputFiles('#file', { name: 'junk.json', mimeType: 'application/json', buffer: Buffer.from('{"nope":true}') });
+await page.waitForSelector('#toast.show');
+check('a junk file is refused', (await page.locator('#toast').innerText()).includes('isn\u2019t a Field Sketch file'));
 
 check('no console or page errors', errors.length === 0);
 if (errors.length) console.log(errors);

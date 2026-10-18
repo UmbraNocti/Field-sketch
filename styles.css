@@ -49,7 +49,24 @@ button:disabled { opacity: .35; cursor: default; }
   background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
-#topbar h1 { margin: 0; font-size: 17px; letter-spacing: .01em; }
+#topbar h1 { margin: 0; font-size: 17px; letter-spacing: .01em; line-height: 1.1; }
+.brand { display: flex; flex-direction: column; min-width: 0; }
+.job {
+  max-width: 46vw;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.job.unnamed { color: var(--muted); font-weight: 500; }
+.ico { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -4px; }
+.bar-btn .word { margin-left: 5px; }
 .bar-actions { display: flex; gap: 6px; }
 .bar-btn {
   min-height: 40px;
@@ -155,6 +172,8 @@ button:disabled { opacity: .35; cursor: default; }
 .mk-line { fill: none; stroke-width: 1.6; stroke-linecap: round; stroke: var(--ink); }
 .mk-outlet { fill: #fff4dc; stroke: #b7791f; }
 .mk-outlet-line { stroke: #b7791f; }
+.mk-outlet220 { fill: #efe6ff; stroke: #6b46c1; }
+.mk-text220 { font: 800 9px system-ui, sans-serif; fill: #4c2a9a; }
 .mk-plumbing { fill: #d6ecff; stroke: #1d6fb8; }
 .mk-gas { fill: #fde2e2; stroke: #c62828; }
 .mk-text { font: 700 12px system-ui, sans-serif; fill: #c62828; }
@@ -229,7 +248,8 @@ button:disabled { opacity: .35; cursor: default; }
   background: #fff;
   text-align: left;
 }
-.chip small { font-size: 11px; color: var(--muted); }
+.chip small { font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip b i { margin-left: 5px; font-style: normal; font-weight: 500; font-size: 12px; color: var(--muted); }
 .chip b { font-size: 15px; }
 .chip.missing { border-left-color: var(--warn); background: #fff9f2; }
 .chip.missing b { color: var(--warn); }
@@ -346,8 +366,11 @@ button:disabled { opacity: .35; cursor: default; }
   #panel { border-left: 0; border-top: 1px solid var(--line); }
   .panel-scroll { flex: 1 1 0; }
   .bar-btn .word { display: none; }
-  .bar-btn { min-width: 44px; padding: 0 10px; }
-  #topbar h1 { font-size: 15px; white-space: nowrap; }
+  .bar-btn { min-width: 40px; padding: 0 8px; }
+  .bar-actions { gap: 4px; }
+  #topbar h1 { display: none; }
+  .job { font-size: 15px; font-weight: 700; color: var(--ink); max-width: 36vw; }
+  .job.unnamed { color: var(--muted); font-weight: 500; }
 }
 
 @media (max-height: 520px) {

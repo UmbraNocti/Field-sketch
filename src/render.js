@@ -1,6 +1,5 @@
 // Builds the SVG for the sketch. Everything is placed in screen px so line widths and text stay
 // the same size at any zoom.
-import { openingSpan } from './geometry.js';
 import { wallFrames } from './recognize.js';
 import { formatInches } from './format.js';
 
@@ -9,7 +8,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 export const MARKER_NAMES = {
   plumbing: 'Plumbing',
-  outlet: 'Outlet',
+  outlet: 'Outlet 120V',
+  outlet220: 'Outlet 220V',
   gas: 'Gas',
   vent: 'HVAC vent',
   column: 'Column',
@@ -23,6 +23,8 @@ export function markerSymbol(type) {
         '<circle r="11" class="mk-body mk-outlet"/>' +
         '<path class="mk-line mk-outlet-line" d="M-3.5 -5V1M3.5 -5V1M-3 6h6"/>'
       );
+    case 'outlet220':
+      return '<circle r="12" class="mk-body mk-outlet220"/><text class="mk-text220" y="1" text-anchor="middle" dominant-baseline="middle">220</text>';
     case 'plumbing':
       return '<path class="mk-body mk-plumbing" d="M0-12C7-3 9 2 9 5A9 9 0 0 1-9 5C-9 2-7-3 0-12Z"/>';
     case 'gas':
@@ -73,6 +75,31 @@ export function openingTitle(room, op) {
   return `${op.kind === 'window' ? 'Window' : 'Door'} ${n}`;
 }
 
+// What an opening's position is measured from: a wall corner or the neighbouring opening.
+export function refLabel(room, op) {
+  const ref = op.ref || { id: null, side: 'before' };
+  if (ref.id != null) {
+    const o = room.openings.find((x) => x.id === ref.id);
+    if (o) return openingTitle(room, o);
+  }
+  const n = room.dirs.length;
+  const i = op.wall;
+  return ref.side === 'before' ? `corner W${((i - 1 + n) % n) + 1}/W${i + 1}` : `corner W${i + 1}/W${((i + 1) % n) + 1}`;
+}
+
+// Distance from the reference to the near edge of the opening, as currently drawn.
+export function positionInfo(room, derived, op) {
+  const span = derived.spans.get(op.id);
+  const a = derived.verts[op.wall];
+  const b = derived.verts[op.wall + 1];
+  const L = Math.hypot(b.x - a.x, b.y - a.y);
+  const ref = op.ref || { id: null, side: 'before' };
+  const rs = ref.id != null ? derived.spans.get(ref.id) : null;
+  const anchorU = ref.side === 'before' ? (rs ? rs[1] : 0) : rs ? rs[0] : L;
+  const gap = ref.side === 'before' ? span[0] - anchorU : anchorU - span[1];
+  return { gap: Math.max(0, gap), anchorU, side: ref.side, label: refLabel(room, op) };
+}
+
 export function renderScene({ state, derived, view, ui }) {
   const S = (p) => ({ x: p.x * view.s + view.ox, y: p.y * view.s + view.oy });
   const room = state.room;
@@ -100,7 +127,7 @@ export function renderScene({ state, derived, view, ui }) {
       }
       const spans = room.openings
         .filter((o) => o.wall === f.i)
-        .map((o) => openingSpan(o, f.L))
+        .map((o) => derived.spans.get(o.id))
         .sort((p, q) => p[0] - q[0]);
       let cursor = 0;
       const free = [];
@@ -118,7 +145,7 @@ export function renderScene({ state, derived, view, ui }) {
     for (const op of room.openings) {
       const f = frames[op.wall];
       if (!f) continue;
-      const [u0, u1] = openingSpan(op, f.L);
+      const [u0, u1] = derived.spans.get(op.id);
       const P0 = S(add(f.a, f.d, u0));
       const P1 = S(add(f.a, f.d, u1));
       const n = f.n;
@@ -163,6 +190,21 @@ export function renderScene({ state, derived, view, ui }) {
         out += line(add(b, out_n, -4), add(b, out_n, 4), 'dim-line');
         const act = activeIs(ui, 'opening', 'id', op.id) && ui.active.field === dm.key ? ' active' : '';
         out += label(mid.x, mid.y, `${dm.prefix} ${miss ? '?' : formatInches(dm.val, { quote: false })}`, (miss ? 'missing' : '') + act, ang);
+      }
+      if (op.kind === 'window') {
+        const pi = positionInfo(room, derived, op);
+        const edgeU = pi.side === 'before' ? u0 : u1;
+        const A = S(add(f.a, f.d, pi.anchorU));
+        const E = S(add(f.a, f.d, edgeU));
+        const miss = op.pos == null;
+        const pa = add(A, out_n, 88);
+        const pe = add(E, out_n, 88);
+        out += line(add(A, out_n, 8), add(A, out_n, 94), 'dim-line');
+        out += line(add(E, out_n, 8), add(E, out_n, 94), 'dim-line');
+        out += line(pa, pe, 'dim-line' + (miss ? ' dashed' : ''));
+        const pm = { x: (pa.x + pe.x) / 2, y: (pa.y + pe.y) / 2 };
+        const act = activeIs(ui, 'opening', 'id', op.id) && ui.active.field === 'pos' ? ' active' : '';
+        out += label(pm.x, pm.y, `${miss ? '?' : formatInches(op.pos, { quote: false })} to ${pi.label}`, 'small' + (miss ? ' missing' : '') + act, ang);
       }
       if (op.kind === 'window') {
         const mid = add(C, out_n, 64);

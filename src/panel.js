@@ -1,7 +1,7 @@
 // Side panel markup: dimension list + keypad on the Walls tab, marker toolbox on Markings.
 import { formatInches, formatEntry, FRACTION_LABELS } from './format.js';
 import { FIELD_LABELS, openingFields, MARKER_TYPES } from './store.js';
-import { markerIcon, MARKER_NAMES, openingTitle } from './render.js';
+import { markerIcon, MARKER_NAMES, openingTitle, refLabel, positionInfo } from './render.js';
 import { sameField, getFieldValue, fieldTitle } from './fields.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -63,8 +63,10 @@ function wallsPanel(state, derived, ui) {
         .map((field) => {
           const v = op[field];
           const act = ui.active && ui.active.kind === 'opening' && ui.active.id === op.id && ui.active.field === field ? ' active' : '';
+          const title = field === 'pos' ? `Position \u00b7 ${refLabel(room, op)}` : FIELD_LABELS[field];
+          const approx = field === 'pos' && v == null ? `<i>\u2248${esc(formatInches(positionInfo(room, derived, op).gap, { quote: false }))}</i>` : '';
           return `<button class="chip${v == null ? ' missing' : ' done'}${act}" data-act="field" data-kind="opening" data-id="${op.id}" data-field="${field}">
-            <small>${esc(FIELD_LABELS[field])}</small><b>${v == null ? '?' : esc(formatInches(v))}</b></button>`;
+            <small>${esc(title)}</small><b>${v == null ? '?' : esc(formatInches(v))}${approx}</b></button>`;
         })
         .join('');
       return `<div class="opening">

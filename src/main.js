@@ -1,5 +1,5 @@
 import { createStore, deriveRoom, newRoom, openingFields } from './store.js';
-import { strokeToPolygon, openingSpan } from './geometry.js';
+import { strokeToPolygon, nearestReference } from './geometry.js';
 import {
   classifyStroke,
   wallFrames,
@@ -19,6 +19,7 @@ import {
   entryClear,
 } from './format.js';
 import { renderScene } from './render.js';
+import { serializeSketch, parseSketch, fileNameFor } from './file.js';
 import { panelMarkup } from './panel.js';
 import { getFieldValue, setFieldValue, sameField, openingFieldList, wallQueueAfter } from './fields.js';
 
@@ -86,6 +87,9 @@ function resetView() {
   view.oy = 0;
 }
 
+// Callouts for doors and windows stand this many px outside their wall, so the fit leaves room.
+const CALLOUT_PX = { door: 70, window: 108 };
+
 function fitView() {
   const state = store.get();
   const d = deriveRoom(state.room);
@@ -95,24 +99,35 @@ function fitView() {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const p of d.verts) {
+  const grow = (p) => {
     minX = Math.min(minX, p.x);
     minY = Math.min(minY, p.y);
     maxX = Math.max(maxX, p.x);
     maxY = Math.max(maxY, p.y);
+  };
+  d.verts.forEach(grow);
+  state.markers.forEach(grow);
+
+  const pad = Math.max(30, Math.min(70, 0.08 * Math.min(w, h)));
+  const extra = { l: 0, r: 0, t: 0, b: 0 };
+  const fr = wallFrames(d.verts, state.room.construction);
+  for (const op of state.room.openings) {
+    const f = fr[op.wall];
+    const px = CALLOUT_PX[op.kind];
+    const ox = -f.n.x * d.orient * px;
+    const oy = -f.n.y * d.orient * px;
+    extra.r = Math.max(extra.r, ox);
+    extra.l = Math.max(extra.l, -ox);
+    extra.b = Math.max(extra.b, oy);
+    extra.t = Math.max(extra.t, -oy);
   }
-  for (const m of state.markers) {
-    minX = Math.min(minX, m.x);
-    minY = Math.min(minY, m.y);
-    maxX = Math.max(maxX, m.x);
-    maxY = Math.max(maxY, m.y);
-  }
-  const pad = Math.max(36, Math.min(95, 0.11 * Math.min(w, h))) + (state.room.openings.length ? 28 : 0);
   const bw = Math.max(maxX - minX, 24);
   const bh = Math.max(maxY - minY, 24);
-  view.s = Math.min(10, (w - 2 * pad) / bw, (h - 2 * pad) / bh);
-  view.ox = w / 2 - ((minX + maxX) / 2) * view.s;
-  view.oy = h / 2 - ((minY + maxY) / 2) * view.s;
+  const availW = w - 2 * pad - extra.l - extra.r;
+  const availH = h - 2 * pad - extra.t - extra.b;
+  view.s = Math.max(0.3, Math.min(10, availW / bw, availH / bh));
+  view.ox = pad + extra.l + (availW - bw * view.s) / 2 - minX * view.s;
+  view.oy = pad + extra.t + (availH - bh * view.s) / 2 - minY * view.s;
   ui.userMoved = false;
 }
 
@@ -192,6 +207,9 @@ function render() {
     hintTimer = setTimeout(() => hintEl.classList.add('fade'), 5000);
   }
 
+  const jn = $('jobname');
+  jn.textContent = state.name || 'Untitled sketch';
+  jn.classList.toggle('unnamed', !state.name);
   $('undo').disabled = !store.canUndo();
   $('redo').disabled = !store.canRedo();
 }
@@ -271,23 +289,27 @@ function handleWallStroke(pts) {
   if (replaced) toast('Room redrawn.', { label: 'Undo', fn: () => store.undo() });
 }
 
-function overlaps(room, wall, u0, u1, ignoreId) {
-  const f = frames()[wall];
+function overlaps(room, spans, wall, u0, u1) {
   return room.openings.some((o) => {
-    if (o.wall !== wall || o.id === ignoreId) return false;
-    const [a, b] = openingSpan(o, f.L);
-    return u0 < b && u1 > a;
+    if (o.wall !== wall) return false;
+    const sp = spans.get(o.id);
+    return !!sp && u0 < sp[1] && u1 > sp[0];
   });
 }
 
 function createOpening(kind, wall, center, width, swing) {
+  const state = store.get();
+  const d = deriveRoom(state.room);
   const f = frames()[wall];
   const w = Math.min(Math.max(12, width), f.L);
   const c = Math.max(w / 2, Math.min(f.L - w / 2, center));
-  if (overlaps(store.get().room, wall, c - w / 2, c + w / 2)) return toast('That overlaps another opening.');
+  const span = [c - w / 2, c + w / 2];
+  if (overlaps(state.room, d.spans, wall, span[0], span[1])) return toast('That overlaps another opening.');
+  const others = state.room.openings.filter((o) => o.wall === wall).map((o) => ({ id: o.id, span: d.spans.get(o.id) }));
+  const ref = nearestReference(span, f.L, others);
   let created = null;
   store.mutate((s) => {
-    created = { id: s.nextId++, wall, kind, t: c / f.L, drawW: Math.round(w), ro: null, cc: null, sill: null, h: null, swing: swing || null };
+    created = { id: s.nextId++, wall, kind, t: c / f.L, drawW: Math.round(w), ro: null, cc: null, sill: null, h: null, pos: null, ref, swing: swing || null };
     s.room.openings.push(created);
   });
   ui.pending = null;
@@ -320,12 +342,13 @@ function handleDoorStroke(pts, cls) {
   if (door.error) return toast('That’s too narrow for a door.');
   const state = store.get();
   const f = frames()[door.wall];
+  const spans = deriveRoom(state.room).spans;
   const c = door.t * f.L;
   const span0 = c - door.drawW / 2;
   const span1 = c + door.drawW / 2;
   const existing = state.room.openings.find((o) => {
     if (o.wall !== door.wall || o.kind !== 'door') return false;
-    const [u0, u1] = openingSpan(o, f.L);
+    const [u0, u1] = spans.get(o.id);
     const oc = (u0 + u1) / 2;
     return (oc >= span0 && oc <= span1) || (c >= u0 && c <= u1);
   });
@@ -374,7 +397,7 @@ function handleTap(p) {
   }
   const fr = frames();
   const w = toWorld(p);
-  const op = hitOpening(w, fr, state.room.openings, tolW(16));
+  const op = hitOpening(w, fr, state.room.openings, tolW(16), deriveRoom(state.room).spans);
   if (op) {
     applyEntry();
     openOpening(op);
@@ -654,7 +677,15 @@ panelEl.addEventListener('click', (e) => {
       break;
     case 'del-opening':
       store.mutate((s) => {
-        s.room.openings = s.room.openings.filter((o) => o.id !== Number(d.id));
+        const gone = Number(d.id);
+        s.room.openings = s.room.openings.filter((o) => o.id !== gone);
+        // Anything measured from the removed opening falls back to its nearest corner.
+        for (const o of s.room.openings) {
+          if (o.ref && o.ref.id === gone) {
+            o.ref = { id: null, side: o.ref.side };
+            o.pos = null;
+          }
+        }
       });
       if (ui.active && ui.active.kind === 'opening' && ui.active.id === Number(d.id)) setActive(null);
       render();
@@ -691,6 +722,68 @@ $('fit').addEventListener('click', () => {
   fitView();
   render();
 });
+function renameSketch() {
+  const cur = store.get().name || '';
+  const n = window.prompt('Name this sketch (customer or job):', cur);
+  if (n === null) return false;
+  store.mutate(
+    (s) => {
+      s.name = n.trim().slice(0, 80);
+    },
+    { snapshot: false },
+  );
+  return true;
+}
+
+async function saveSketch() {
+  if (!store.get().name && !renameSketch()) return;
+  const state = store.get();
+  const text = serializeSketch(state);
+  const name = fileNameFor(state);
+  const blob = new Blob([text], { type: 'application/json' });
+  const file = new File([blob], name, { type: 'application/json' });
+  // On a tablet the share sheet offers "Save to Files"; elsewhere it's a normal download.
+  if (window.matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: state.name || 'Field sketch' });
+      return toast('Saved.');
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  toast(`Saved ${name}`);
+}
+
+$('save').addEventListener('click', saveSketch);
+$('jobname').addEventListener('click', () => {
+  renameSketch();
+});
+$('open').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', async (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  const res = parseSketch(await f.text());
+  if (res.error) return toast(res.error);
+  const cur = store.get();
+  if ((cur.room || cur.markers.length) && !window.confirm(`Open "${res.state.name || f.name}" and replace the sketch on screen? You can undo this right after.`)) return;
+  store.replace(res.state);
+  setActive(null);
+  ui.pending = null;
+  ui.selectedMarker = null;
+  fitView();
+  render();
+  toast(`Opened ${res.state.name || f.name}`, { label: 'Undo', fn: () => store.undo() });
+});
+
 $('new').addEventListener('click', () => {
   const s = store.get();
   if (!s.room && !s.markers.length) return;

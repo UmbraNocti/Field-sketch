@@ -27,6 +27,7 @@ Primary user: a cabinet specialist at 84 Lumber (Knoxville). Main lines sold: 19
 - Entered wall lengths are kept exactly. Walls without a number are adjusted just enough to close the loop. If the entered numbers can't close it, the gap is shown instead of being hidden.
 - Markers are free-placed, draggable and deletable. Columns ask for width and depth.
 - The sketch autosaves in the browser and works offline once loaded.
+- **Save** writes a plain-text `.fieldsketch.json` file named after the job (on a tablet it opens the share sheet, so it can go to Files). **Open** reads one back. Files from other apps are refused, and damaged pieces are dropped when reading.
 
 ## Layout
 
@@ -49,7 +50,8 @@ Dimensions:
 
 - The panel prompts for every wall length. All can be skipped, but missing ones are color-coded.
 - Doors prompt for **rough opening** and **casing-to-casing**.
-- Windows prompt for **rough opening** and **casing-to-casing**, plus **sill height** and **window height**.
+- Windows prompt for **rough opening** and **casing-to-casing**, plus **position**, **sill height** and **window height**.
+- **Position** is how far the window's rough opening sits from the nearest wall corner or the neighbouring opening, chosen when the window is drawn. It is measured to the rough-opening edge and labeled on the drawing (for example "30 to Door 1"). Once entered, the window is placed exactly there and stays put if the wall length changes.
 - Both sizes are kept because cabinets must stay clear of the casing (see clearance rules below). The minimum distance is a cabinet rule, not part of the opening.
 - Doors and windows are annotated with a dimension line off the side of the drawing.
 - **Ceiling height** is entered on this tab.
@@ -59,7 +61,8 @@ Dimensions:
 The dimension panel is replaced by a small marker toolbox. Markers drop wherever they are placed (wall or floor), and **markers do not snap**.
 
 - Plumbing stub-out
-- Outlet
+- Outlet (120V)
+- Outlet (220V), separate from the standard outlet: for ovens and ranges
 - Gas
 - HVAC vent
 - Column / pillar (asks for its size)
