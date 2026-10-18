@@ -63,3 +63,15 @@ test('nearestReference picks the closest corner or neighbour', () => {
   assert.deepEqual(nearestReference([100, 136], 200, [{ id: 7, span: [40, 90] }]), { id: 7, side: 'before' });
   assert.deepEqual(nearestReference([100, 136], 200, [{ id: 8, span: [140, 180] }]), { id: 8, side: 'after' });
 });
+
+test('a position of zero puts the opening flush against its reference', () => {
+  const fromStart = computeSpans([op({ id: 1, ro: 36, pos: 0, ref: { id: null, side: 'before' } })], 144);
+  near(fromStart.get(1)[0], 0);
+  const fromEnd = computeSpans([op({ id: 1, ro: 36, pos: 0, ref: { id: null, side: 'after' } })], 144);
+  near(fromEnd.get(1)[1], 144);
+  const nextToDoor = computeSpans(
+    [op({ id: 1, ro: 36, pos: 10, ref: { id: null, side: 'before' } }), op({ id: 2, ro: 30, pos: 0, ref: { id: 1, side: 'before' } })],
+    200,
+  );
+  near(nextToDoor.get(2)[0], nextToDoor.get(1)[1]);
+});

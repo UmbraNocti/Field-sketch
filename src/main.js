@@ -230,7 +230,9 @@ function applyEntry() {
   const e = ui.entry;
   if (entryHasInput(e)) {
     const v = entryToInches(e);
-    if (v <= 0) return;
+    // Zero is a real position (a doorway flush to a corner) and "no crown"; other sizes need a value.
+    const zeroOk = a.kind === 'opening' && a.field === 'pos';
+    if (v < 0 || (v === 0 && !zeroOk)) return;
     store.mutate((s) => setFieldValue(s, a, v));
     if (a.kind === 'wall' && !ui.userMoved) fitView();
   } else if (e.cleared) {
