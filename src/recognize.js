@@ -45,16 +45,19 @@ export function classifyStroke(pts) {
   const bulge = chord > 0 ? maxDev / chord : 99;
   if (bulge < 0.1) return { type: 'line', pathLen, chord };
 
-  // Arcs turn one way the whole time.
-  const rs = dedupe(pts, 6);
+  // An arc bows to one side of its chord the whole way. Judge that by which side the points sit
+  // on (not by local turning, which is swamped by finger jitter on a large arc).
+  const clear = Math.max(2, chord * 0.03);
   let pos = 0;
   let neg = 0;
-  for (let i = 1; i < rs.length - 1; i++) {
-    const c = (rs[i].x - rs[i - 1].x) * (rs[i + 1].y - rs[i].y) - (rs[i].y - rs[i - 1].y) * (rs[i + 1].x - rs[i].x);
-    if (c > 0.5) pos++;
-    else if (c < -0.5) neg++;
+  const cx = b.x - a.x;
+  const cy = b.y - a.y;
+  for (const p of pts) {
+    const dev = ((p.x - a.x) * cy - (p.y - a.y) * cx) / Math.max(chord, 1);
+    if (dev > clear) pos++;
+    else if (dev < -clear) neg++;
   }
-  const consistent = pos + neg > 0 && Math.max(pos, neg) / (pos + neg) >= 0.8;
+  const consistent = pos + neg > 0 && Math.max(pos, neg) / (pos + neg) >= 0.92;
   if (sharp === 0 && bulge >= 0.13 && bulge <= 0.65 && consistent) return { type: 'arc', pathLen, chord };
   return { type: 'other', pathLen, chord };
 }

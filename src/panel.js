@@ -102,7 +102,7 @@ function markingsPanel(state, ui) {
     : '';
   const counts = MARKER_TYPES.map((t) => [t, state.markers.filter((m) => m.type === t).length]).filter(([, n]) => n > 0);
   const summary = counts.length
-    ? `<p class="muted">${counts.map(([t, n]) => `${n} ${esc(MARKER_NAMES[t].toLowerCase())}`).join(' · ')}</p>`
+    ? `<p class="muted">${counts.map(([t, n]) => `${n} × ${esc(MARKER_NAMES[t])}`).join(' · ')}</p>`
     : '<p class="muted">Pick a marker, then tap the sketch to place it. Drag a placed marker to move it.</p>';
   return `<div class="tools">${tools}${move}</div>${selCard}${summary}`;
 }

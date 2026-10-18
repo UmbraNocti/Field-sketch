@@ -75,3 +75,21 @@ test('hitWall finds the nearest wall within tolerance', () => {
   assert.equal(hitWall({ x: 60, y: 3 }, frames, 6).i, 0);
   assert.equal(hitWall({ x: 60, y: 48 }, frames, 6), null);
 });
+
+test('big, shaky arcs still read as arcs; an S curve does not', () => {
+  const noisy = (scale, jitter) => {
+    const r = 36 * scale;
+    const pts = [];
+    for (let i = 0; i <= 90; i++) {
+      const a = (i / 90) * (Math.PI / 2);
+      pts.push({ x: r * Math.cos(a) + (((i * 7919) % 13) / 13 - 0.5) * jitter, y: r * Math.sin(a) + (((i * 104729) % 17) / 17 - 0.5) * jitter });
+    }
+    return pts;
+  };
+  for (const scale of [2, 3.5, 4.4, 6, 9]) {
+    assert.equal(classifyStroke(noisy(scale, 1.5)).type, 'arc', `scale ${scale}`);
+  }
+  const s = [];
+  for (let i = 0; i <= 60; i++) s.push({ x: i * 4, y: 40 * Math.sin((i / 60) * Math.PI * 2) });
+  assert.notEqual(classifyStroke(s).type, 'arc');
+});
