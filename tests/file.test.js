@@ -21,7 +21,14 @@ function sampleState() {
     ],
     ceiling: 96,
     name: 'Smith kitchen',
-    nextId: 7,
+    nextId: 10,
+    runs: [
+      { id: 7, layer: 'lower', kind: 'wall', wall: 0, u0: 0, u1: 144.125 },
+      { id: 8, layer: 'upper', kind: 'wall', wall: 0, u0: 12, u1: 100 },
+      { id: 9, layer: 'lower', kind: 'free', a: { x: 20, y: 30 }, b: { x: 90, y: 30 } },
+    ],
+    cornerPicks: { 'lower:1': { wall: 1, opt: 2 } },
+    upper: { height: 42, crown: 3, rail: 0 },
   };
 }
 
@@ -70,10 +77,34 @@ test('older sketches without positions load, and the next id never collides', ()
     delete o.ref;
   }
   old.nextId = 1;
+  delete old.runs;
+  delete old.cornerPicks;
+  delete old.upper;
   const n = normalizeState(old);
   assert.equal(n.room.openings[0].pos, null);
   assert.deepEqual(n.room.openings[0].ref, { id: null, side: 'before' });
   assert.ok(n.nextId > 6);
+  assert.deepEqual(n.runs, []);
+  assert.deepEqual(n.upper, { height: null, crown: 0, rail: 0 });
+});
+
+test('bad runs, corner picks and upper values are cleaned up', () => {
+  const s = sampleState();
+  const messy = JSON.parse(JSON.stringify(s));
+  messy.runs.push({ id: 20, layer: 'lower', kind: 'wall', wall: 99, u0: 0, u1: 50 });
+  messy.runs.push({ id: 21, layer: 'middle', kind: 'wall', wall: 0, u0: 0, u1: 50 });
+  messy.runs.push({ id: 22, layer: 'lower', kind: 'wall', wall: 0, u0: 10, u1: 10.2 });
+  messy.cornerPicks['lower:x'] = { wall: 1, opt: 1 };
+  messy.upper = { height: -3, crown: -1, rail: 'a' };
+  const n = normalizeState(messy);
+  assert.equal(n.runs.length, 3);
+  assert.deepEqual(Object.keys(n.cornerPicks), ['lower:1']);
+  assert.deepEqual(n.upper, { height: null, crown: 0, rail: 0 });
+});
+
+test('runs are dropped when there is no room', () => {
+  const n = normalizeState({ room: null, markers: [], runs: [{ id: 1, layer: 'lower', kind: 'free', a: { x: 0, y: 0 }, b: { x: 50, y: 0 } }] });
+  assert.deepEqual(n.runs, []);
 });
 
 test('file names come from the job name and date', () => {

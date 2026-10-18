@@ -1,6 +1,7 @@
 // Side panel markup: dimension list + keypad on the Walls tab, marker toolbox on Markings.
 import { formatInches, formatEntry, FRACTION_LABELS } from './format.js';
-import { FIELD_LABELS, openingFields, MARKER_TYPES } from './store.js';
+import { FIELD_LABELS, openingFields } from './store.js';
+import { UTILITY_TYPES, APPLIANCE_TYPES, APPLIANCE_NAMES } from './rules.js';
 import { markerIcon, MARKER_NAMES, openingTitle, refLabel, positionInfo } from './render.js';
 import { sameField, getFieldValue, fieldTitle } from './fields.js';
 
@@ -89,7 +90,7 @@ function wallsPanel(state, derived, ui) {
 }
 
 function markingsPanel(state, ui) {
-  const tools = MARKER_TYPES.map(
+  const tools = UTILITY_TYPES.map(
     (t) =>
       `<button class="tool${ui.markerTool === t ? ' active' : ''}" data-act="marker-tool" data-type="${t}">${markerIcon(t)}<span>${esc(MARKER_NAMES[t])}</span></button>`,
   ).join('');
@@ -100,19 +101,63 @@ function markingsPanel(state, ui) {
         <div class="sel-actions">${sel.type === 'column' ? `<button class="btn" data-act="edit-column" data-id="${sel.id}">Size</button>` : ''}
         <button class="btn danger" data-act="del-marker" data-id="${sel.id}">Delete</button></div></div>`
     : '';
-  const counts = MARKER_TYPES.map((t) => [t, state.markers.filter((m) => m.type === t).length]).filter(([, n]) => n > 0);
+  const counts = UTILITY_TYPES.map((t) => [t, state.markers.filter((m) => m.type === t).length]).filter(([, n]) => n > 0);
   const summary = counts.length
     ? `<p class="muted">${counts.map(([t, n]) => `${n} × ${esc(MARKER_NAMES[t])}`).join(' · ')}</p>`
     : '<p class="muted">Pick a marker, then tap the sketch to place it. Drag a placed marker to move it.</p>';
   return `<div class="tools">${tools}${move}</div>${selCard}${summary}`;
 }
 
-function soonPanel(tab) {
-  const name = tab === 'lowers' ? 'Lowers' : 'Uppers';
-  return `<div class="empty"><p><strong>${name} are next.</strong></p><p>The room and markings stay visible here. Auto-filled cabinets come in the next build.</p></div>`;
+function cabinetPanel(state, ui, layouts) {
+  const layer = ui.tab === 'uppers' ? 'upper' : 'lower';
+  const lay = layouts[layer];
+  const name = layer === 'upper' ? 'Uppers' : 'Lowers';
+  if (!state.room) {
+    return `<div class="empty"><p><strong>Draw the room first.</strong></p><p>${name} hang on its walls.</p></div>`;
+  }
+  const selM = state.markers.find((m) => m.id === ui.selectedMarker && APPLIANCE_TYPES.includes(m.type));
+  const selCard = selM
+    ? `<div class="sel-card"><div><b>${esc(APPLIANCE_NAMES[selM.type])}</b>${selM.w ? ` \u00b7 ${esc(formatInches(selM.w))}` : ''} selected</div>
+        <div class="sel-actions">${selM.type !== 'pantry' ? `<button class="btn" data-act="edit-width" data-id="${selM.id}">Width</button>` : ''}
+        <button class="btn danger" data-act="del-marker" data-id="${selM.id}">Delete</button></div></div>`
+    : '';
+  const notes = lay.notes
+    .map((n) => `<div class="note ${n.level}">${esc(n.text)}</div>`)
+    .join('');
+  const runs = lay.runs
+    .map((rl) => {
+      const sel = ui.selectedRun === rl.run.id;
+      const where = rl.run.kind === 'wall' ? `W${rl.run.wall + 1}` : 'Island';
+      const len = formatInches(rl.run.kind === 'wall' ? rl.run.u1 - rl.run.u0 : rl.frame.L);
+      const items = rl.boxes.map((b) => `<span class="cut ${b.kind}">${esc(b.label)}</span>`).join('');
+      const corners = rl.boxes.filter((b) => b.kind === 'corner');
+      const extra = sel
+        ? `<div class="sel-actions">${corners
+            .map((c) => `<button class="btn" data-act="swap-corner" data-key="${esc(c.corner.key)}" data-wall="${c.cornerWalls[1]}" data-opt="${c.corner.opt}">Corner to W${c.cornerWalls[1] + 1}</button>`)
+            .join('')}<button class="btn danger" data-act="del-run" data-id="${rl.run.id}">Delete run</button></div>`
+        : '';
+      return `<div class="run${sel ? ' sel' : ''}" data-act="pick-run" data-id="${rl.run.id}">
+        <div class="run-head"><b>${rl.run.kind === 'wall' ? 'Run' : 'Island'} ${rl.index}</b><span>${where} \u00b7 ${esc(len)}</span></div>
+        <div class="cuts">${items || '<em class="muted">nothing fits here</em>'}</div>${extra}</div>`;
+    })
+    .join('');
+  const counts = new Map();
+  for (const rl of lay.runs) for (const b of rl.boxes) counts.set(b.label, (counts.get(b.label) || 0) + 1);
+  const summary = [...counts.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
+    .map(([l, n]) => `${esc(l)} \u00d7${n}`)
+    .join(' \u00b7 ');
+  const hint = lay.runs.length
+    ? ''
+    : `<div class="empty"><p><strong>Drag along a wall</strong> with the Cabinets pencil and the boxes fill in.</p>${
+        layer === 'lower' ? '<p>Drop appliance markers first to steer the layout, or after to adjust it. Drag in open floor for an island.</p>' : '<p>Windows and doors are left clear, with room for crown or light rail.</p>'
+      }</div>`;
+  return `${selCard}${notes ? `<h3>Heads-up</h3>${notes}` : ''}
+    ${hint}${runs ? `<h3>${name} runs</h3>${runs}` : ''}
+    ${summary ? `<h3>Order summary</h3><p class="summary">${summary}</p>` : ''}`;
 }
 
-export function panelMarkup(state, derived, ui) {
+export function panelMarkup(state, derived, ui, layouts) {
   let body;
   let title;
   if (ui.tab === 'walls') {
@@ -123,7 +168,7 @@ export function panelMarkup(state, derived, ui) {
     body = markingsPanel(state, ui);
   } else {
     title = ui.tab === 'lowers' ? 'Lowers' : 'Uppers';
-    body = soonPanel(ui.tab);
+    body = cabinetPanel(state, ui, layouts);
   }
   return `<div class="panel-head"><h2>${title}</h2></div>
     <div class="panel-scroll">${body}</div>

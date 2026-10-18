@@ -3,32 +3,14 @@
 // Needs Playwright: set PLAYWRIGHT_PATH to the folder that contains the `playwright` package
 // (defaults to the global node_modules of the running node). Set BASE_URL to test a server
 // you started yourself instead.
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import http from 'node:http';
-import { fileURLToPath } from 'node:url';
+import { loadPlaywright, serve } from './helpers.mjs';
 
-const require = createRequire(process.env.PLAYWRIGHT_PATH ? path.join(process.env.PLAYWRIGHT_PATH, '/') : path.join(process.execPath, '../../lib/node_modules/'));
-const { chromium } = require('playwright');
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
-let server = null;
-let BASE = process.env.BASE_URL;
-if (!BASE) {
-  server = http.createServer((req, res) => {
-    const url = decodeURIComponent(req.url.split('?')[0]);
-    const file = path.join(ROOT, url === '/' ? 'index.html' : url);
-    if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-      res.writeHead(404).end('not found');
-      return;
-    }
-    res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }).end(fs.readFileSync(file));
-  });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  BASE = `http://127.0.0.1:${server.address().port}/index.html`;
-}
+const { chromium } = loadPlaywright();
+const server = await serve();
+const BASE = server.base;
 
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 1180, height: 820 }, serviceWorkers: 'block' });
@@ -265,5 +247,5 @@ check('a junk file is refused', (await page.locator('#toast').innerText()).inclu
 check('no console or page errors', errors.length === 0);
 if (errors.length) console.log(errors);
 await browser.close();
-if (server) server.close();
+server.close();
 process.exit(failed ? 1 : 0);

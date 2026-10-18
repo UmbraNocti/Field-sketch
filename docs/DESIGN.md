@@ -1,6 +1,6 @@
 # Field-sketch: Design Notes
 
-Status: the Walls and Markings tabs are built (see the README). Lowers and Uppers are not built yet. First-pass cabinet rules are recorded below (from memory; to be refined against the catalogs).
+Status: all four tabs are built. Lowers and Uppers are a first pass: the rules below that the user confirmed are in, and the rest are marked placeholders in `src/rules.js` to be replaced from the catalog and real jobs.
 
 ## Purpose
 
@@ -28,6 +28,61 @@ Primary user: a cabinet specialist at 84 Lumber (Knoxville). Main lines sold: 19
 - Markers are free-placed, draggable and deletable. Columns ask for width and depth.
 - The sketch autosaves in the browser and works offline once loaded.
 - **Save** writes a plain-text `.fieldsketch.json` file named after the job (on a tablet it opens the share sheet, so it can go to Files). **Open** reads one back. Files from other apps are refused, and damaged pieces are dropped when reading.
+
+## As built (Lowers and Uppers, first pass)
+
+All the numbers live in `src/rules.js`, marked CONFIRMED or PLACEHOLDER. Changing a rule means editing a number there.
+
+**Drawing cabinets.** With the Cabinets pencil, drag along a wall (or a little in front of it) to make a run. Ends within 18" of a wall corner snap to it; ends near a door or window snap to its clearance edge. Dragging in open floor on the Lowers tab makes an island (boxes extend to the right of the drag direction). Uppers only hang on walls. Redrawing over a run on the same wall replaces it. Tap a box to select its run (delete it from the panel).
+
+**What the fill does, in priority order.**
+1. Hard constraints: appliance widths, touching the right hookup, dishwasher within 36" of the sink, a leftover that can be covered.
+2. Centering: the sink box on the window behind it (or on the sink marker if there is no window).
+3. Clean widths: as little filler as possible (filler is limited to 3").
+4. Symmetry: boxes inside a stretch are arranged as mirror images when the sizes allow it.
+5. Fewest boxes.
+6. Tie-break: stay near where the markers were dropped.
+
+**Standard sizes** are 15" to 42" in 3" steps. Because fewest-boxes is the last rule and 42 is a last resort, 39" and 42" boxes are only used if `preferredMax` is raised. A sink or cooktop box stays at 36" or under unless nothing smaller makes the stretch work.
+
+**Blockers.** Doors are always kept clear. Windows are kept clear by lowers only if the sill is under 36" (a window with no sill height entered is assumed high, with a note). Uppers keep clear of every window. Clearance is 1" from the casing (casing-to-casing), plus the larger of crown or light rail for uppers. A run that crosses a blocker is filled as separate stretches.
+
+**Corners.** Where two runs meet at a square inside corner, one run (the one drawn first) gets a blind corner cabinet; the other starts one cabinet depth (24" lowers, 12" uppers) in. Tap the corner cabinet to cycle its size; the panel can move it to the other wall. Angled corners get no special treatment.
+
+**Markers in lowers.**
+- Dishwasher and range are fixed-width voids (drawn with an X). Fridge and oven are fixed-width full-height cabinets with the same position in the uppers. Sink and cooktop are boxes at least as wide as the marker. A pantry marker makes the box under it full height (also in the uppers).
+- Each asks how wide when dropped; skipping keeps the usual size (sink 24, cooktop 30, range 30, fridge 36, oven 30, dishwasher 24).
+- An appliance touching a hookup stays on it. With none touching it can shift up to one width. A missing hookup flags "no hookups marked" and is still placed. Range, oven and cooktop use 220V or gas; fridge and dishwasher use the 120V outlet; the sink uses plumbing.
+- A fridge gets panels on any side that is not a wall, a corner or another full-height cabinet.
+- "No dishwasher marked" is shown when there are lowers and no dishwasher marker. Nothing is added automatically.
+
+**Islands.** A red zone is drawn 36" in front of every wall run of lowers. An island closer than that to the cabinets across from it is outlined in red and flagged.
+
+**Uppers.** The lowers show faintly underneath. Upper height, crown and light rail are set in the bottom-left corner of the drawing (crown and light rail default to 0 = none).
+
+**Order summary.** The panel lists every box in each run in order (for example `B33 B30 SB24 B33 BBC36`) and counts of each, as the rough list to build the order from in Syncly.
+
+### Placeholders to replace (from real catalogs and jobs)
+
+| Rule | Now | Where |
+|---|---|---|
+| Blind corner widths, lowers / uppers | 36, 39, 42 / 24, 27, 30 | `cornerOptions` |
+| Cabinet depths | 24 / 12 | `depth` |
+| Upper sizes | same 15 to 42 steps | `upper.sizes` |
+| Largest filler | 3" | `maxFiller` |
+| Largest sink/cooktop box | 36" | `flexMax` |
+| How far a loose appliance may shift | 1 width | `freeShiftWidths` |
+| How close counts as "touching" a hookup | 6" along the wall, 24" out | `hookupReach` |
+| Default appliance widths | see above | `defaultWidths` |
+| Snap distances | 18" to a corner or blocker, 14" in front of cabinets | `snapDistance`, `wallSnapOut` |
+
+### Not built yet / questions
+- A 72" open run comes out as two 36s (fewest boxes). The earlier example was three 24s. Which is wanted? That is a rule about preferred sizes, not about the count.
+- Hood or cabinet over the range, end panels beside a dishwasher or range, and a hood-vent clearance for uppers.
+- Which wall gets the blind corner by default (currently the run drawn first).
+- Per-box overrides (resize or swap one cabinet by hand) and 12" spice/specialty boxes.
+- Angled (45 degree) corners and outside corners.
+- Export of a clean image or PDF.
 
 ## Layout
 

@@ -1,5 +1,5 @@
 // Offline cache: the app is static files, so cache them all and refresh in the background.
-const CACHE = 'field-sketch-v2';
+const CACHE = 'field-sketch-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -15,6 +15,9 @@ const ASSETS = [
   './src/fields.js',
   './src/format.js',
   './src/file.js',
+  './src/rules.js',
+  './src/fill.js',
+  './src/layout.js',
 ];
 
 self.addEventListener('install', (e) => {

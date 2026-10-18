@@ -1,10 +1,11 @@
 // Sketch state, derived geometry, undo history and local autosave.
 import { solveLengths, buildVerts, signedArea, computeSpans, dist } from './geometry.js';
+import { APPLIANCE_TYPES, UTILITY_TYPES } from './rules.js';
 
 const KEY = 'fieldsketch.v1';
 const HISTORY_LIMIT = 100;
 
-export const MARKER_TYPES = ['plumbing', 'outlet', 'outlet220', 'gas', 'vent', 'column'];
+export const MARKER_TYPES = [...UTILITY_TYPES, ...APPLIANCE_TYPES];
 
 export const FIELD_LABELS = {
   ro: 'Rough opening',
@@ -19,7 +20,16 @@ export function openingFields(kind) {
 }
 
 export function blankState() {
-  return { room: null, markers: [], ceiling: null, name: '', nextId: 1 };
+  return {
+    room: null,
+    markers: [],
+    ceiling: null,
+    name: '',
+    nextId: 1,
+    runs: [],
+    cornerPicks: {},
+    upper: { height: null, crown: 0, rail: 0 },
+  };
 }
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -87,16 +97,52 @@ export function normalizeState(raw) {
     if (m.type === 'column') {
       out.w = numOrNull(m.w);
       out.d = numOrNull(m.d);
+    } else if (APPLIANCE_TYPES.includes(m.type)) {
+      out.w = numOrNull(m.w);
     }
     markers.push(out);
   }
-  const ids = [...(room ? room.openings.map((o) => o.id) : []), ...markers.map((m) => m.id)];
+
+  // Cabinet runs only make sense with a room to hang them on.
+  const runs = [];
+  if (room && Array.isArray(raw.runs)) {
+    for (const r of raw.runs) {
+      if (!r || !Number.isInteger(r.id) || (r.layer !== 'lower' && r.layer !== 'upper')) continue;
+      if (r.kind === 'wall') {
+        if (!Number.isInteger(r.wall) || r.wall < 0 || r.wall >= room.dirs.length || !isNum(r.u0) || !isNum(r.u1)) continue;
+        const u0 = Math.max(0, Math.min(r.u0, r.u1));
+        const u1 = Math.max(r.u0, r.u1);
+        if (u1 - u0 < 1) continue;
+        runs.push({ id: r.id, layer: r.layer, kind: 'wall', wall: r.wall, u0, u1 });
+      } else if (r.kind === 'free') {
+        const ok = (p) => p && isNum(p.x) && isNum(p.y);
+        if (!ok(r.a) || !ok(r.b) || Math.hypot(r.a.x - r.b.x, r.a.y - r.b.y) < 1) continue;
+        runs.push({ id: r.id, layer: r.layer, kind: 'free', a: { x: r.a.x, y: r.a.y }, b: { x: r.b.x, y: r.b.y } });
+      }
+    }
+  }
+  const cornerPicks = {};
+  if (raw.cornerPicks && typeof raw.cornerPicks === 'object') {
+    for (const [k, v] of Object.entries(raw.cornerPicks)) {
+      if (/^(lower|upper):\d+$/.test(k) && v && Number.isInteger(v.wall) && Number.isInteger(v.opt) && v.opt >= 0 && v.opt < 20) {
+        cornerPicks[k] = { wall: v.wall, opt: v.opt };
+      }
+    }
+  }
+  const up = raw.upper && typeof raw.upper === 'object' ? raw.upper : {};
+  const zeroOk = (v) => (isNum(v) && v >= 0 ? v : 0);
+  const upper = { height: numOrNull(up.height), crown: zeroOk(up.crown), rail: zeroOk(up.rail) };
+
+  const ids = [...(room ? room.openings.map((o) => o.id) : []), ...markers.map((m) => m.id), ...runs.map((r) => r.id)];
   return {
     room,
     markers,
     ceiling: numOrNull(raw.ceiling),
     name: typeof raw.name === 'string' ? raw.name.slice(0, 80) : '',
     nextId: Math.max(isNum(raw.nextId) ? Math.floor(raw.nextId) : 1, ...ids.map((i) => i + 1), 1),
+    runs,
+    cornerPicks,
+    upper,
   };
 }
 

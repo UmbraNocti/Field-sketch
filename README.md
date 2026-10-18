@@ -10,8 +10,8 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full design and rules.
 |---|---|
 | Walls | Built: finger-drawn walls, dimension panel + keypad, doors, windows, open (construction) walls |
 | Markings | Built: plumbing, outlet, gas, HVAC vent, column |
-| Lowers | Not built yet |
-| Uppers | Not built yet |
+| Lowers | First pass: drag-to-fill cabinet runs, appliance markers, blind corners, islands, notes |
+| Uppers | First pass: same, over a faint copy of the lowers, with crown and light rail clearance |
 
 ## Using it
 
@@ -31,6 +31,10 @@ It's a static web app with no build step and no accounts. Everything is saved in
 
 **Save and Open:** the top bar's Save writes the sketch to a text file (`name-date.fieldsketch.json`) and Open reads one back. The sketch also autosaves in the browser. Tap the name under the title to rename the sketch.
 
+**Lowers tab:** pick the Cabinets pencil and drag along a wall; the boxes fill in using the rules in `src/rules.js` (see the design notes). Drop appliance markers (sink, cooktop, range, fridge, oven, dishwasher, pantry) to steer the layout; each asks how wide. Tap a blind corner cabinet to cycle its size. Tap a box to select its run and delete it. Drag in open floor for an island; the red band shows where islands can't go. The panel lists each run's boxes in order, notes like "no dishwasher marked", and an order summary.
+
+**Uppers tab:** same drag-along-a-wall, over a faint copy of the lowers. Set upper height, crown and light rail in the bottom-left corner; crown and light rail leave extra room next to windows and doors.
+
 Pinch to zoom and drag with two fingers to pan. **Fit** re-centers.
 
 ## Run it locally
@@ -38,7 +42,7 @@ Pinch to zoom and drag with two fingers to pan. **Fit** re-centers.
 ```sh
 npm run serve          # python3 -m http.server 8080, then open http://localhost:8080
 npm test               # unit tests (node)
-node tests/e2e/smoke.mjs   # browser smoke test, needs Playwright and the server running
+npm run e2e            # browser tests (walls, markers, cabinets); needs Playwright installed
 ```
 
 ## Put it on an iPad
@@ -49,6 +53,9 @@ The simplest way is GitHub Pages: in the repository settings, set Pages to deplo
 
 - `index.html`, `styles.css`: the page
 - `src/geometry.js`: snapping, closing a stroke into walls, solving wall lengths
+- `src/rules.js`: every cabinet rule and number, in one place
+- `src/fill.js`: the auto-fill (fits boxes around appliances)
+- `src/layout.js`: turns runs, openings and markers into cabinet boxes
 - `src/recognize.js`: reading door, window and construction strokes
 - `src/store.js`: sketch state, undo, local save
 - `src/render.js`, `src/panel.js`, `src/main.js`: drawing, side panel, input

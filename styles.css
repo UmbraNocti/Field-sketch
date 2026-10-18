@@ -383,3 +383,64 @@ button:disabled { opacity: .35; cursor: default; }
 }
 
 #hint.fade { opacity: 0; }
+
+/* cabinets */
+.bx { stroke: var(--ink); stroke-width: 1.4; fill: #fff; }
+.bx-base { fill: #ffffff; }
+.bx-corner { fill: #fff0b8; stroke-width: 1.8; }
+.bx-flex { fill: #d9ecff; stroke: #1d6fb8; stroke-width: 1.8; }
+.bx-void { fill: #f6dede; stroke: #a94442; stroke-dasharray: 5 3; }
+.bx-tall { fill: #e5ddf5; stroke: #5b3f9a; stroke-width: 1.8; }
+.bx-filler { fill: #eceff3; stroke: var(--muted); stroke-dasharray: 3 3; }
+.bx-gap { fill: #ffd9d9; stroke: var(--bad); stroke-dasharray: 5 3; }
+.bx.ghost { opacity: .32; stroke-width: 1; pointer-events: none; }
+.bx-x { stroke: #a94442; stroke-width: 1.4; }
+.panel-bar { stroke: #5b3f9a; stroke-width: 4; stroke-linecap: butt; }
+.lbl.box { font-size: 11px; font-weight: 700; }
+.zone { fill: rgba(198, 40, 40, .09); stroke: rgba(198, 40, 40, .5); stroke-dasharray: 6 4; stroke-width: 1.2; pointer-events: none; }
+.sel-run { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 7 4; pointer-events: none; }
+.bad-run { fill: none; stroke: var(--bad); stroke-width: 3; pointer-events: none; }
+.marker.faint { opacity: .38; pointer-events: none; }
+.mk-sink { fill: #d9ecff; stroke: #1d6fb8; }
+.mk-sink-line { stroke: #1d6fb8; fill: none; }
+.mk-dot { fill: #1d6fb8; }
+.mk-cooktop { fill: #ffe9cf; stroke: #c26a0a; }
+.mk-cooktop-line { stroke: #c26a0a; }
+.mk-range { fill: #f6dede; stroke: #a94442; }
+.mk-range-line { stroke: #a94442; }
+.mk-fridge { fill: #e3eef7; stroke: #3d6a8a; }
+.mk-fridge-line { stroke: #3d6a8a; }
+.mk-oven { fill: #ececec; stroke: #555; }
+.mk-oven-line { stroke: #555; }
+.mk-dw { fill: #e8f0e4; stroke: #4c7a3e; }
+.mk-dwtext { fill: #4c7a3e; font-size: 10px; }
+.mk-pantry { fill: #e5ddf5; stroke: #5b3f9a; }
+.mk-pantry-line { stroke: #5b3f9a; }
+
+.note { margin-bottom: 6px; padding: 8px 10px; border-radius: 8px; font-size: 13px; line-height: 1.3; }
+.note.warn { background: #fff3e6; color: #8a4a05; border-left: 4px solid var(--warn); }
+.note.info { background: #eef2f6; color: #3e4c59; border-left: 4px solid #aab4bf; }
+.run { margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.run.sel { outline: 2px solid var(--accent); outline-offset: -1px; background: #f4f9ff; }
+.run-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.run-head span { color: var(--muted); font-size: 13px; }
+.cuts { display: flex; flex-wrap: wrap; gap: 4px; }
+.cut { padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line); background: #fafbfc; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cut.corner { background: #fff0b8; border-color: #e0c870; }
+.cut.flex { background: #d9ecff; border-color: #9cc6ee; }
+.cut.void { background: #f6dede; border-color: #e3b1b1; }
+.cut.tall { background: #e5ddf5; border-color: #c4b6e6; }
+.cut.filler, .cut.gap { background: #eceff3; color: #52606d; font-weight: 600; }
+.cut.gap { background: #ffd9d9; color: var(--bad); }
+.summary { margin: 0; font-size: 13px; line-height: 1.7; font-variant-numeric: tabular-nums; }
+#corner { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; }
+#corner[hidden] { display: none; }
+#corner button { min-height: 40px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; text-align: left; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+#corner button small { display: block; font-size: 11px; color: var(--muted); }
+#corner button b { font-size: 15px; }
+#corner button.on { outline: 2px solid var(--accent); }
+.tool-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 66px; height: 66px; padding: 2px 6px; border: 1px solid #cfc7b2; border-radius: 10px; background: #fffdf8; font-size: 11px; font-weight: 700; color: #4a4336; margin-bottom: 8px; }
+.tool-tile.active { outline: 2px solid var(--accent); outline-offset: -1px; background: #eef6ff; color: var(--accent); }
+#tray.scroll { justify-content: flex-start; overflow-x: auto; overflow-y: hidden; gap: 8px; }
+#tray.scroll > :first-child { margin-left: auto; }
+#tray.scroll > :last-child { margin-right: auto; }

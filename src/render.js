@@ -2,11 +2,20 @@
 // the same size at any zoom.
 import { wallFrames } from './recognize.js';
 import { formatInches } from './format.js';
+import { APPLIANCE_TYPES, RULES } from './rules.js';
 
 const r1 = (n) => Math.round(n * 10) / 10;
+const fmt = (v) => formatInches(v, { quote: false });
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export const MARKER_NAMES = {
+  sink: 'Sink',
+  cooktop: 'Cooktop',
+  range: 'Range',
+  fridge: 'Fridge',
+  oven: 'Oven',
+  dishwasher: 'Dishwasher',
+  pantry: 'Pantry',
   plumbing: 'Plumbing',
   outlet: 'Outlet 120V',
   outlet220: 'Outlet 220V',
@@ -36,6 +45,20 @@ export function markerSymbol(type) {
       );
     case 'column':
       return '<rect class="mk-body mk-column" x="-10" y="-10" width="20" height="20"/><path class="mk-line mk-column-line" d="M-10-10L10 10M10-10L-10 10"/>';
+    case 'sink':
+      return '<rect class="mk-body mk-sink" x="-14" y="-10" width="28" height="20" rx="3"/><rect class="mk-line mk-sink-line" x="-9" y="-4" width="18" height="11" rx="2"/><circle class="mk-dot mk-sink-line" cx="0" cy="-7" r="1.4"/>';
+    case 'cooktop':
+      return '<rect class="mk-body mk-cooktop" x="-13" y="-13" width="26" height="26" rx="3"/><circle class="mk-line mk-cooktop-line" cx="-5" cy="-5" r="3.5"/><circle class="mk-line mk-cooktop-line" cx="5" cy="-5" r="3.5"/><circle class="mk-line mk-cooktop-line" cx="-5" cy="5" r="3.5"/><circle class="mk-line mk-cooktop-line" cx="5" cy="5" r="3.5"/>';
+    case 'range':
+      return '<rect class="mk-body mk-range" x="-13" y="-14" width="26" height="28" rx="3"/><circle class="mk-line mk-range-line" cx="-5" cy="-7" r="3"/><circle class="mk-line mk-range-line" cx="5" cy="-7" r="3"/><rect class="mk-line mk-range-line" x="-9" y="1" width="18" height="9" rx="1.5"/>';
+    case 'fridge':
+      return '<rect class="mk-body mk-fridge" x="-9" y="-14" width="18" height="28" rx="2"/><path class="mk-line mk-fridge-line" d="M-9-3H9M-5-9v3M-5 1v5"/>';
+    case 'oven':
+      return '<rect class="mk-body mk-oven" x="-12" y="-12" width="24" height="24" rx="2"/><rect class="mk-line mk-oven-line" x="-8" y="-3" width="16" height="11" rx="1"/><path class="mk-line mk-oven-line" d="M-6-8H6"/>';
+    case 'dishwasher':
+      return '<rect class="mk-body mk-dw" x="-12" y="-12" width="24" height="24" rx="2"/><text class="mk-text mk-dwtext" y="1" text-anchor="middle" dominant-baseline="middle">DW</text>';
+    case 'pantry':
+      return '<rect class="mk-body mk-pantry" x="-8" y="-14" width="16" height="28" rx="2"/><path class="mk-line mk-pantry-line" d="M-8-5H8M-8 4H8"/>';
     default:
       return '';
   }
@@ -100,10 +123,61 @@ export function positionInfo(room, derived, op) {
   return { gap: Math.max(0, gap), anchorU, side: ref.side, label: refLabel(room, op) };
 }
 
-export function renderScene({ state, derived, view, ui }) {
+const polyStr = (poly, S) =>
+  poly
+    .map((p) => {
+      const q = S(p);
+      return `${r1(q.x)},${r1(q.y)}`;
+    })
+    .join(' ');
+
+// One layer's boxes. `ghost` draws them faint and unlabeled (the lowers under the uppers).
+function drawLayout(layout, S, view, ui, ghost, labels) {
+  let out = '';
+  for (const rl of layout.runs) {
+    const fr = rl.frame;
+    const ang = readableAngle(fr.d);
+    for (const b of rl.boxes) {
+      const pts = b.poly.map(S);
+      const cls = `bx bx-${b.kind}${ghost ? ' ghost' : ''}`;
+      out += `<polygon class="${cls}" points="${pts.map((p) => `${r1(p.x)},${r1(p.y)}`).join(' ')}"/>`;
+      if (ghost) continue;
+      if (b.kind === 'void') {
+        out += line(pts[0], pts[2], 'bx-x') + line(pts[1], pts[3], 'bx-x');
+      }
+      if (b.panels) {
+        if (b.panels.left) out += line(pts[0], pts[3], 'panel-bar');
+        if (b.panels.right) out += line(pts[1], pts[2], 'panel-bar');
+      }
+      const c = { x: (pts[0].x + pts[2].x) / 2, y: (pts[0].y + pts[2].y) / 2 };
+      const along = (b.u1 - b.u0) * view.s;
+      const deep = b.depth * view.s;
+      const text = b.kind === 'corner' ? `${b.label} \u21bb` : b.label;
+      if (along >= 22 && deep >= 14) {
+        const fits = along >= text.length * 6.4 + 6;
+        const shown = fits ? text : fmt(b.u1 - b.u0);
+        labels.push(label(c.x, c.y, along >= shown.length * 6.4 ? shown : '', 'small box', ang));
+      }
+    }
+    if (ui.selectedRun === rl.run.id) {
+      const sel = [at0(fr, fr.u0, 0), at0(fr, fr.u1, 0), at0(fr, fr.u1, rl.depth), at0(fr, fr.u0, rl.depth)];
+      out += `<polygon class="sel-run" points="${polyStr(sel, S)}"/>`;
+    }
+    if (rl.tooClose) {
+      const sel = [at0(fr, 0, 0), at0(fr, fr.L, 0), at0(fr, fr.L, rl.depth), at0(fr, 0, rl.depth)];
+      out += `<polygon class="bad-run" points="${polyStr(sel, S)}"/>`;
+    }
+  }
+  return out;
+}
+
+const at0 = (fr, u, out) => ({ x: fr.a.x + fr.d.x * u + fr.n.x * out, y: fr.a.y + fr.d.y * u + fr.n.y * out });
+
+export function renderScene({ state, derived, view, ui, layouts }) {
   const S = (p) => ({ x: p.x * view.s + view.ox, y: p.y * view.s + view.oy });
   const room = state.room;
   let out = '';
+  const boxLabels = [];
 
   if (room && derived) {
     const frames = wallFrames(derived.verts, room.construction);
@@ -246,6 +320,17 @@ export function renderScene({ state, derived, view, ui }) {
     }
   }
 
+  // Cabinets (lowers and uppers tabs).
+  if (room && derived && layouts && (ui.tab === 'lowers' || ui.tab === 'uppers')) {
+    if (ui.tab === 'lowers') {
+      for (const z of layouts.lower.zones) out += `<polygon class="zone" points="${polyStr(z, S)}"/>`;
+      out += drawLayout(layouts.lower, S, view, ui, false, boxLabels);
+    } else {
+      out += drawLayout(layouts.lower, S, view, ui, true, boxLabels);
+      out += drawLayout(layouts.upper, S, view, ui, false, boxLabels);
+    }
+  }
+
   // Markers on top.
   for (const m of state.markers) {
     const p = S(m);
@@ -259,10 +344,21 @@ export function renderScene({ state, derived, view, ui }) {
       if (m.w) out += label(0, d / 2 + 13, `${formatInches(m.w, { quote: false })}×${formatInches(m.d || m.w, { quote: false })}`, 'small');
       if (sel) out += `<rect class="sel-ring" x="${r1(-w / 2 - 5)}" y="${r1(-d / 2 - 5)}" width="${r1(w + 10)}" height="${r1(d + 10)}" rx="4"/>`;
       out += '</g>';
+    } else if (APPLIANCE_TYPES.includes(m.type)) {
+      // Appliances only show where they matter; elsewhere they sit back, or are hidden.
+      if (ui.tab === 'walls') continue;
+      const faint = ui.tab !== 'lowers' ? ' faint' : '';
+      const w = m.w || RULES.defaultWidths[m.type];
+      out += `<g class="marker${sel}${faint}" transform="translate(${r1(p.x)} ${r1(p.y)})">${markerSymbol(m.type)}${sel ? '<circle class="sel-ring" r="21"/>' : ''}`;
+      if (w) out += label(0, 24, fmt(w), 'small');
+      const note = layouts && ui.tab === 'lowers' && layouts.lower.notes.find((n) => n.markerId === m.id && n.hookup);
+      if (note) out += label(0, 38, 'No hookups marked', 'small missing');
+      out += '</g>';
     } else {
-      out += `<g class="marker${sel}" transform="translate(${r1(p.x)} ${r1(p.y)})">${markerSymbol(m.type)}${sel ? '<circle class="sel-ring" r="19"/>' : ''}</g>`;
+      const faint = ui.tab === 'uppers' ? ' faint' : '';
+      out += `<g class="marker${sel}${faint}" transform="translate(${r1(p.x)} ${r1(p.y)})">${markerSymbol(m.type)}${sel ? '<circle class="sel-ring" r="19"/>' : ''}</g>`;
     }
   }
 
-  return out;
+  return out + boxLabels.join('');
 }

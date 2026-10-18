@@ -1,5 +1,5 @@
 import { createStore, deriveRoom, newRoom, openingFields } from './store.js';
-import { strokeToPolygon, nearestReference } from './geometry.js';
+import { strokeToPolygon, nearestReference, dist, dirIndex, DIRS } from './geometry.js';
 import {
   classifyStroke,
   wallFrames,
@@ -10,6 +10,7 @@ import {
   constructionTargets,
 } from './recognize.js';
 import {
+  formatInches,
   emptyEntry,
   entryHasInput,
   entryToInches,
@@ -18,7 +19,9 @@ import {
   entryBackspace,
   entryClear,
 } from './format.js';
-import { renderScene } from './render.js';
+import { renderScene, markerIcon } from './render.js';
+import { computeLayouts, wallBlockers } from './layout.js';
+import { RULES, APPLIANCE_TYPES, APPLIANCE_NAMES, UTILITY_TYPES } from './rules.js';
 import { serializeSketch, parseSketch, fileNameFor } from './file.js';
 import { panelMarkup } from './panel.js';
 import { getFieldValue, setFieldValue, sameField, openingFieldList, wallQueueAfter } from './fields.js';
@@ -35,6 +38,7 @@ const toastEl = $('toast');
 const emptyEl = $('empty');
 const stageEl = $('stage');
 const wrapEl = $('canvasWrap');
+const cornerEl = $('corner');
 
 const store = createStore(window.localStorage);
 
@@ -46,6 +50,9 @@ const ui = {
   queue: [],
   entry: emptyEntry(),
   selectedMarker: null,
+  selectedRun: null,
+  cabTool: 'cabinets',
+  layouts: null,
   pending: null,
   userMoved: false,
 };
@@ -54,8 +61,8 @@ const view = { s: 3, ox: 0, oy: 0 };
 const TABS = [
   { id: 'walls', label: 'Walls' },
   { id: 'markings', label: 'Markings' },
-  { id: 'lowers', label: 'Lowers', soon: true },
-  { id: 'uppers', label: 'Uppers', soon: true },
+  { id: 'lowers', label: 'Lowers' },
+  { id: 'uppers', label: 'Uppers' },
 ];
 
 const PENCILS = [
@@ -107,6 +114,12 @@ function fitView() {
   };
   d.verts.forEach(grow);
   state.markers.forEach(grow);
+  for (const r of state.runs || []) {
+    if (r.kind === 'free') {
+      grow(r.a);
+      grow(r.b);
+    }
+  }
 
   const pad = Math.max(30, Math.min(70, 0.08 * Math.min(w, h)));
   const extra = { l: 0, r: 0, t: 0, b: 0 };
@@ -157,16 +170,43 @@ function toast(msg, action) {
 
 let hintTimer = 0;
 
+function trayMarkup() {
+  if (ui.tab === 'walls') {
+    return PENCILS.map(
+      (p) => `<button class="pencil${ui.tool === p.id ? ' active' : ''}" data-tool="${p.id}">${pencilSvg(p.color)}<span>${p.label}</span></button>`,
+    ).join('');
+  }
+  const pencil = `<button class="pencil${ui.cabTool === 'cabinets' ? ' active' : ''}" data-cab="cabinets">${pencilSvg('#8a5a2b')}<span>Cabinets</span></button>`;
+  if (ui.tab === 'uppers') return pencil;
+  const tiles = APPLIANCE_TYPES.map(
+    (t) => `<button class="tool-tile${ui.cabTool === t ? ' active' : ''}" data-cab="${t}">${markerIcon(t)}<span>${APPLIANCE_NAMES[t]}</span></button>`,
+  ).join('');
+  const move = `<button class="tool-tile${ui.cabTool === 'select' ? ' active' : ''}" data-cab="select"><svg viewBox="-16 -16 32 32" width="30" height="30" aria-hidden="true"><path class="mk-line" stroke="currentColor" d="M0-11V11M-11 0H11M0-11l-4 4M0-11l4 4M0 11l-4-4M0 11l4-4M-11 0l4-4M-11 0l4 4M11 0l-4-4M11 0l-4 4"/></svg><span>Move</span></button>`;
+  return pencil + tiles + move;
+}
+
+function cornerMarkup(state) {
+  const u = state.upper || {};
+  const chip = (field, title, val, zeroNote) => {
+    const on = ui.active && ui.active.kind === 'upper' && ui.active.field === field ? ' on' : '';
+    const text = val == null ? '\u2014' : formatInches(val);
+    return `<button class="${on.trim()}" data-act="corner-field" data-field="${field}"><small>${title}</small><b>${text}${zeroNote && val === 0 ? ' (none)' : ''}</b></button>`;
+  };
+  return chip('height', 'Upper height', u.height, false) + chip('crown', 'Crown', u.crown, true) + chip('rail', 'Light rail', u.rail, true);
+}
+
 function render() {
   const state = store.get();
   const derived = deriveRoom(state.room);
-  scene.innerHTML = renderScene({ state, derived, view, ui });
+  const layouts = computeLayouts(state, derived);
+  ui.layouts = layouts;
+  scene.innerHTML = renderScene({ state, derived, view, ui, layouts });
   emptyEl.hidden = !!state.room || ui.tab !== 'walls';
   stageEl.classList.toggle('kp-open', !!ui.active);
 
   const scroller = panelEl.querySelector('.panel-scroll');
   const keep = scroller ? scroller.scrollTop : 0;
-  panelEl.innerHTML = panelMarkup(state, derived, ui);
+  panelEl.innerHTML = panelMarkup(state, derived, ui, layouts);
   const sc = panelEl.querySelector('.panel-scroll');
   if (sc) {
     sc.scrollTop = keep;
@@ -182,13 +222,13 @@ function render() {
     (t) => `<button class="tab${ui.tab === t.id ? ' active' : ''}${t.soon ? ' soon' : ''}" data-tab="${t.id}">${t.label}</button>`,
   ).join('');
 
-  const showTray = ui.tab === 'walls';
+  const showTray = ui.tab === 'walls' || ui.tab === 'lowers' || ui.tab === 'uppers';
   trayEl.hidden = !showTray;
-  if (showTray) {
-    trayEl.innerHTML = PENCILS.map(
-      (p) => `<button class="pencil${ui.tool === p.id ? ' active' : ''}" data-tool="${p.id}">${pencilSvg(p.color)}<span>${p.label}</span></button>`,
-    ).join('');
-  }
+  trayEl.classList.toggle('scroll', ui.tab === 'lowers');
+  if (showTray) trayEl.innerHTML = trayMarkup();
+
+  cornerEl.hidden = ui.tab !== 'uppers';
+  if (ui.tab === 'uppers') cornerEl.innerHTML = cornerMarkup(state);
 
   let hint = '';
   if (ui.tab === 'walls') {
@@ -197,8 +237,15 @@ function render() {
     else hint = PENCILS.find((p) => p.id === ui.tool).hint;
   } else if (ui.tab === 'markings') {
     hint = ui.markerTool === 'select' ? 'Drag a marker to move it. Tap one to select it.' : 'Tap the sketch to place a marker. Drag a placed one to move it.';
+  } else if (ui.cabTool === 'cabinets') {
+    hint =
+      ui.tab === 'lowers'
+        ? 'Drag along a wall to fill it with cabinets, or in open floor for an island. Tap a corner cabinet to change its size.'
+        : 'Drag along a wall to hang uppers. Windows and doors stay clear. Crown and light rail are set at the bottom left.';
+  } else if (ui.cabTool === 'select') {
+    hint = 'Drag a marker to move it. Tap one to select it.';
   } else {
-    hint = 'Cabinets are the next build. The sketch is read-only here.';
+    hint = `Tap to drop the ${APPLIANCE_NAMES[ui.cabTool].toLowerCase()}. It steers the layout; drag it to adjust.`;
   }
   if (hintEl.textContent !== hint) {
     hintEl.textContent = hint;
@@ -231,7 +278,7 @@ function applyEntry() {
   if (entryHasInput(e)) {
     const v = entryToInches(e);
     // Zero is a real position (a doorway flush to a corner) and "no crown"; other sizes need a value.
-    const zeroOk = a.kind === 'opening' && a.field === 'pos';
+    const zeroOk = (a.kind === 'opening' && a.field === 'pos') || (a.kind === 'upper' && (a.field === 'crown' || a.field === 'rail'));
     if (v < 0 || (v === 0 && !zeroOk)) return;
     store.mutate((s) => setFieldValue(s, a, v));
     if (a.kind === 'wall' && !ui.userMoved) fitView();
@@ -432,8 +479,10 @@ function finishWallsStroke(pts) {
 
 function markerAt(p) {
   const state = store.get();
+  const editable = ui.tab === 'lowers' ? APPLIANCE_TYPES : UTILITY_TYPES;
   for (let i = state.markers.length - 1; i >= 0; i--) {
     const m = state.markers[i];
+    if (!editable.includes(m.type)) continue;
     const sx = m.x * view.s + view.ox;
     const sy = m.y * view.s + view.oy;
     let hw = 22;
@@ -447,8 +496,7 @@ function markerAt(p) {
   return null;
 }
 
-function placeMarker(p) {
-  const type = ui.markerTool;
+function placeMarker(p, type = ui.markerTool) {
   if (type === 'select') {
     ui.selectedMarker = null;
     return render();
@@ -460,6 +508,10 @@ function placeMarker(p) {
     if (type === 'column') {
       created.w = null;
       created.d = null;
+    } else if (APPLIANCE_TYPES.includes(type) && type !== 'pantry') {
+      created.w = RULES.defaultWidths[type];
+    } else if (type === 'pantry') {
+      created.w = null;
     }
     s.markers.push(created);
   });
@@ -467,7 +519,144 @@ function placeMarker(p) {
   if (type === 'column') {
     setActive({ kind: 'marker', id: created.id, field: 'w' }, [{ kind: 'marker', id: created.id, field: 'd' }]);
     render();
+  } else if (APPLIANCE_TYPES.includes(type) && type !== 'pantry') {
+    // Ask how wide; skipping keeps the usual size.
+    setActive({ kind: 'marker', id: created.id, field: 'w' }, []);
+    render();
   }
+}
+
+// ---------- cabinets ----------
+
+const layerOfTab = () => (ui.tab === 'uppers' ? 'upper' : 'lower');
+
+function inPoly(p, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+function cycleCorner(rl, b) {
+  const layer = layerOfTab();
+  const c = b.corner;
+  const next = (c.opt + 1) % c.count;
+  store.mutate((s) => {
+    s.cornerPicks[c.key] = { wall: rl.run.wall, opt: next };
+  });
+  ui.selectedRun = rl.run.id;
+  render();
+  toast(`Blind corner ${formatInches(RULES[layer].cornerOptions[next])} (${next + 1} of ${c.count}). Tap again for the next size.`);
+}
+
+function handleCabTap(p) {
+  const layer = layerOfTab();
+  const lay = ui.layouts && ui.layouts[layer];
+  const w = toWorld(p);
+  if (lay) {
+    for (const rl of lay.runs) {
+      for (const b of rl.boxes) {
+        if (inPoly(w, b.poly)) {
+          if (b.kind === 'corner') return cycleCorner(rl, b);
+          ui.selectedRun = rl.run.id;
+          ui.selectedMarker = null;
+          return render();
+        }
+      }
+    }
+  }
+  if (ui.active) {
+    applyEntry();
+    setActive(null);
+  }
+  ui.selectedRun = null;
+  ui.selectedMarker = null;
+  render();
+}
+
+function handleRunStroke(pts) {
+  const state = store.get();
+  const derived = deriveRoom(state.room);
+  if (!derived) return toast('Draw the room outline first.');
+  const layer = layerOfTab();
+  const depth = RULES[layer].depth;
+  const A = toWorld(pts[0]);
+  const B = toWorld(pts[pts.length - 1]);
+  const chord = dist(A, B);
+  if (chord < 12) return toast('Drag a little further to draw a run.');
+  const fr = wallFrames(derived.verts, state.room.construction);
+  const proj = (P, f) => ({
+    u: (P.x - f.a.x) * f.d.x + (P.y - f.a.y) * f.d.y,
+    perp: (P.x - f.a.x) * f.n.x * derived.orient + (P.y - f.a.y) * f.n.y * derived.orient,
+  });
+  let best = null;
+  for (const f of fr) {
+    if (f.construction) continue;
+    const par = Math.abs((B.x - A.x) * f.d.x + (B.y - A.y) * f.d.y) / chord;
+    if (par < 0.9) continue;
+    const pa = proj(A, f);
+    const pb = proj(B, f);
+    const ok = (v) => v >= -24 && v <= depth + RULES.wallSnapOut;
+    if (!ok(pa.perp) || !ok(pb.perp)) continue;
+    const u0 = Math.min(pa.u, pb.u);
+    const u1 = Math.max(pa.u, pb.u);
+    if (u1 < 0 || u0 > f.L) continue;
+    const score = (Math.abs(pa.perp - depth / 2) + Math.abs(pb.perp - depth / 2)) / 2;
+    if (!best || score < best.score) best = { f, u0, u1, score };
+  }
+
+  let run = null;
+  if (best) {
+    const L = best.f.L;
+    let u0 = Math.max(0, best.u0);
+    let u1 = Math.min(L, best.u1);
+    const snap = RULES.snapDistance;
+    if (u0 < snap) u0 = 0;
+    if (L - u1 < snap) u1 = L;
+    for (const bl of wallBlockers(layer, state, derived, best.f.i)) {
+      if (Math.abs(u0 - bl.u1) < snap && u0 >= bl.u0) u0 = bl.u1;
+      if (Math.abs(u1 - bl.u0) < snap && u1 <= bl.u1) u1 = bl.u0;
+    }
+    u0 = Math.round(u0 * 2) / 2;
+    u1 = Math.round(u1 * 2) / 2;
+    if (u1 - u0 < 12) return toast('That run is too short. Drag further along the wall.');
+    run = { layer, kind: 'wall', wall: best.f.i, u0, u1 };
+  } else {
+    if (layer === 'upper') return toast('Uppers hang on walls. Drag along a wall.');
+    const dir = DIRS[dirIndex(B.x - A.x, B.y - A.y)];
+    const len = Math.round(chord);
+    if (len < 15) return toast('That island is too short.');
+    const a = { x: Math.round(A.x * 2) / 2, y: Math.round(A.y * 2) / 2 };
+    run = { layer, kind: 'free', a, b: { x: a.x + dir.x * len, y: a.y + dir.y * len } };
+  }
+  let id = null;
+  store.mutate((s) => {
+    if (run.kind === 'wall') {
+      s.runs = s.runs.filter((r) => !(r.layer === layer && r.kind === 'wall' && r.wall === run.wall && r.u0 < run.u1 && r.u1 > run.u0));
+    }
+    id = s.nextId++;
+    s.runs.push({ id, ...run });
+  });
+  ui.selectedRun = id;
+  render();
+}
+
+function finishCabStroke(pts) {
+  const layer = layerOfTab();
+  const cls = classifyStroke(pts);
+  const p = pts[pts.length - 1];
+  const markerTool = layer === 'lower' && APPLIANCE_TYPES.includes(ui.cabTool);
+  if (markerTool) {
+    if (Math.hypot(p.x - pts[0].x, p.y - pts[0].y) < 40) placeMarker(p, ui.cabTool);
+    return;
+  }
+  if (ui.cabTool === 'select') return handleCabTap(p);
+  if (cls.type === 'tap') return handleCabTap(p);
+  if (cls.type === 'scribble') return toast('Drag one straight line along the wall.');
+  handleRunStroke(pts);
 }
 
 // ---------- pointer input ----------
@@ -524,8 +713,7 @@ svg.addEventListener('pointerdown', (e) => {
     return;
   }
   if (pointers.size > 2) return;
-  if (ui.tab === 'lowers' || ui.tab === 'uppers') return;
-  if (ui.tab === 'markings') {
+  if (ui.tab === 'markings' || ui.tab === 'lowers') {
     const m = markerAt(p);
     if (m) {
       const w = toWorld(p);
@@ -564,7 +752,9 @@ svg.addEventListener('pointermove', (e) => {
   const last = stroke.pts[stroke.pts.length - 1];
   if (Math.hypot(p.x - last.x, p.y - last.y) < 1.5) return;
   stroke.pts.push(p);
-  if (ui.tab === 'walls') preview.setAttribute('points', stroke.pts.map((q) => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(' '));
+  if (ui.tab === 'walls' || ((ui.tab === 'lowers' || ui.tab === 'uppers') && ui.cabTool === 'cabinets')) {
+    preview.setAttribute('points', stroke.pts.map((q) => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(' '));
+  }
 });
 
 function endPointer(e) {
@@ -588,6 +778,7 @@ function endPointer(e) {
   if (e.type === 'pointercancel') return;
   s.pts.push(p);
   if (ui.tab === 'walls') finishWallsStroke(s.pts);
+  else if (ui.tab === 'lowers' || ui.tab === 'uppers') finishCabStroke(s.pts);
   else if (ui.tab === 'markings') {
     const moved = Math.hypot(p.x - s.pts[0].x, p.y - s.pts[0].y);
     if (moved < 40) placeMarker(p);
@@ -628,11 +819,24 @@ tabsEl.addEventListener('click', (e) => {
 });
 
 trayEl.addEventListener('click', (e) => {
+  const cab = e.target.closest('[data-cab]');
+  if (cab) {
+    ui.cabTool = cab.dataset.cab;
+    ui.selectedMarker = null;
+    render();
+    return;
+  }
   const b = e.target.closest('[data-tool]');
   if (!b) return;
   ui.tool = b.dataset.tool;
   ui.pending = null;
   render();
+});
+
+cornerEl.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-field]');
+  if (!b) return;
+  openField({ kind: 'upper', field: b.dataset.field }, []);
 });
 
 panelEl.addEventListener('click', (e) => {
@@ -695,6 +899,26 @@ panelEl.addEventListener('click', (e) => {
     case 'marker-tool':
       ui.markerTool = d.type;
       ui.selectedMarker = null;
+      render();
+      break;
+    case 'pick-run':
+      ui.selectedRun = ui.selectedRun === Number(d.id) ? null : Number(d.id);
+      render();
+      break;
+    case 'del-run':
+      store.mutate((s) => {
+        s.runs = s.runs.filter((r) => r.id !== Number(d.id));
+      });
+      ui.selectedRun = null;
+      render();
+      break;
+    case 'swap-corner':
+      store.mutate((s) => {
+        s.cornerPicks[d.key] = { wall: Number(d.wall), opt: Number(d.opt) };
+      });
+      break;
+    case 'edit-width':
+      setActive({ kind: 'marker', id: Number(d.id), field: 'w' }, []);
       render();
       break;
     case 'del-marker':

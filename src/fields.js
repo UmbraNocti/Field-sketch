@@ -1,7 +1,7 @@
 // The numbers the app asks for, addressed as "fields": a wall length, an opening size, the
 // ceiling height, or a column size. The keypad edits one field at a time.
 import { FIELD_LABELS, openingFields } from './store.js';
-import { openingTitle, refLabel } from './render.js';
+import { openingTitle, refLabel, MARKER_NAMES } from './render.js';
 
 export const sameField = (a, b) =>
   !!a && !!b && a.kind === b.kind && a.i === b.i && a.id === b.id && a.field === b.field;
@@ -20,6 +20,8 @@ export function getFieldValue(state, f) {
     }
     case 'ceiling':
       return state.ceiling;
+    case 'upper':
+      return state.upper ? state.upper[f.field] : null;
     case 'marker': {
       const m = state.markers.find((x) => x.id === f.id);
       return m ? m[f.field] : null;
@@ -42,6 +44,11 @@ export function setFieldValue(state, f, value) {
     case 'ceiling':
       state.ceiling = value;
       break;
+    case 'upper':
+      if (!state.upper) state.upper = { height: null, crown: 0, rail: 0 };
+      // Crown and light rail mean "none" at zero, so clearing one puts it back to 0.
+      state.upper[f.field] = value == null && f.field !== 'height' ? 0 : value;
+      break;
     case 'marker': {
       const m = state.markers.find((x) => x.id === f.id);
       if (m) m[f.field] = value;
@@ -63,8 +70,13 @@ export function fieldTitle(state, f) {
     }
     case 'ceiling':
       return 'Ceiling height';
-    case 'marker':
+    case 'upper':
+      return f.field === 'height' ? 'Upper cabinet height' : f.field === 'crown' ? 'Crown molding' : 'Light rail';
+    case 'marker': {
+      const m = state.markers.find((x) => x.id === f.id);
+      if (m && m.type !== 'column') return `${MARKER_NAMES[m.type]} width`;
       return f.field === 'w' ? 'Column width' : 'Column depth (skip = square)';
+    }
     default:
       return '';
   }
