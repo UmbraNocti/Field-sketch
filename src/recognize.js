@@ -179,3 +179,22 @@ export function constructionTargets(pts, frames, tol) {
   }
   return hits;
 }
+
+// The corner points of a stroke: straight pieces joined at turns. Short wobbles near a turn are
+// absorbed, so a quick swipe down one wall and along the next comes back as three points.
+export function strokeCorners(pts, minSegPx = 28) {
+  const len = polylineLength(pts);
+  const v = simplifyRDP(dedupe(pts, 2), Math.max(12, len * 0.05));
+  let changed = true;
+  while (changed && v.length > 2) {
+    changed = false;
+    for (let i = 0; i < v.length - 1; i++) {
+      if (dist(v[i], v[i + 1]) < minSegPx) {
+        v.splice(i + 1 < v.length - 1 ? i + 1 : i, 1);
+        changed = true;
+        break;
+      }
+    }
+  }
+  return v;
+}

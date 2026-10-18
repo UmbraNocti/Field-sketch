@@ -60,8 +60,13 @@ export const RULES = {
   // further out it is an island. PLACEHOLDER.
   wallSnapOut: 14,
 
-  // Run ends this close to a wall corner snap to it; this close to a blocker, snap to it. PLACEHOLDER.
+  // Run ends this close to a blocker snap to it. PLACEHOLDER.
   snapDistance: 18,
+
+  // Run ends this close to a wall corner count as being in the corner, so two runs that meet
+  // there pair up (one gets the blind corner, the other stops short) instead of overlapping.
+  // PLACEHOLDER.
+  cornerReach: 30,
 };
 
 // What each appliance marker turns into in a run.

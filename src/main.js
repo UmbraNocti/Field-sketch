@@ -8,6 +8,7 @@ import {
   findLineCrossing,
   arcToDoor,
   constructionTargets,
+  strokeCorners,
 } from './recognize.js';
 import {
   formatInches,
@@ -21,8 +22,11 @@ import {
 } from './format.js';
 import { renderScene, markerIcon } from './render.js';
 import { computeLayouts, wallBlockers } from './layout.js';
+import { computeFit } from './viewfit.js';
 import { RULES, APPLIANCE_TYPES, APPLIANCE_NAMES, UTILITY_TYPES } from './rules.js';
 import { serializeSketch, parseSketch, fileNameFor } from './file.js';
+import { buildReport } from './report.js';
+import { buildSketchPdf } from './export.js';
 import { panelMarkup } from './panel.js';
 import { getFieldValue, setFieldValue, sameField, openingFieldList, wallQueueAfter } from './fields.js';
 
@@ -94,53 +98,12 @@ function resetView() {
   view.oy = 0;
 }
 
-// Callouts for doors and windows stand this many px outside their wall, so the fit leaves room.
-const CALLOUT_PX = { door: 84, window: 108 };
-
 function fitView() {
   const state = store.get();
   const d = deriveRoom(state.room);
   if (!d) return resetView();
   const { w, h } = canvasSize();
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  const grow = (p) => {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
-  };
-  d.verts.forEach(grow);
-  state.markers.forEach(grow);
-  for (const r of state.runs || []) {
-    if (r.kind === 'free') {
-      grow(r.a);
-      grow(r.b);
-    }
-  }
-
-  const pad = Math.max(30, Math.min(70, 0.08 * Math.min(w, h)));
-  const extra = { l: 0, r: 0, t: 0, b: 0 };
-  const fr = wallFrames(d.verts, state.room.construction);
-  for (const op of state.room.openings) {
-    const f = fr[op.wall];
-    const px = CALLOUT_PX[op.kind];
-    const ox = -f.n.x * d.orient * px;
-    const oy = -f.n.y * d.orient * px;
-    extra.r = Math.max(extra.r, ox);
-    extra.l = Math.max(extra.l, -ox);
-    extra.b = Math.max(extra.b, oy);
-    extra.t = Math.max(extra.t, -oy);
-  }
-  const bw = Math.max(maxX - minX, 24);
-  const bh = Math.max(maxY - minY, 24);
-  const availW = w - 2 * pad - extra.l - extra.r;
-  const availH = h - 2 * pad - extra.t - extra.b;
-  view.s = Math.max(0.3, Math.min(10, availW / bw, availH / bh));
-  view.ox = pad + extra.l + (availW - bw * view.s) / 2 - minX * view.s;
-  view.oy = pad + extra.t + (availH - bh * view.s) / 2 - minY * view.s;
+  Object.assign(view, computeFit(state, d, w, h));
   ui.userMoved = false;
 }
 
@@ -577,71 +540,130 @@ function handleCabTap(p) {
   render();
 }
 
+// The wall a stretch of finger-drag lies along (parallel to it, within a cabinet's reach of it).
+function matchWall(A, B, frames, orient, depth) {
+  const chord = dist(A, B);
+  let best = null;
+  for (const f of frames) {
+    if (f.construction) continue;
+    const par = Math.abs((B.x - A.x) * f.d.x + (B.y - A.y) * f.d.y) / chord;
+    if (par < 0.9) continue;
+    const proj = (P) => ({
+      u: (P.x - f.a.x) * f.d.x + (P.y - f.a.y) * f.d.y,
+      perp: (P.x - f.a.x) * f.n.x * orient + (P.y - f.a.y) * f.n.y * orient,
+    });
+    const pa = proj(A);
+    const pb = proj(B);
+    const ok = (v) => v >= -24 && v <= depth + RULES.wallSnapOut;
+    if (!ok(pa.perp) || !ok(pb.perp)) continue;
+    if (Math.max(pa.u, pb.u) < 0 || Math.min(pa.u, pb.u) > f.L) continue;
+    const score = (Math.abs(pa.perp - depth / 2) + Math.abs(pb.perp - depth / 2)) / 2;
+    if (!best || score < best.score) best = { f, ua: pa.u, ub: pb.u, score };
+  }
+  return best;
+}
+
+// Tidy the ends of a run on a wall: into the corner if close, up against a door or window's
+// clearance if close, to the half inch. Returns null if it is too short to be a run.
+function finishWallRun(layer, state, derived, f, u0, u1) {
+  const L = f.L;
+  u0 = Math.max(0, u0);
+  u1 = Math.min(L, u1);
+  const snap = RULES.snapDistance;
+  if (u0 < RULES.cornerReach) u0 = 0;
+  if (L - u1 < RULES.cornerReach) u1 = L;
+  for (const bl of wallBlockers(layer, state, derived, f.i)) {
+    if (Math.abs(u0 - bl.u1) < snap && u0 >= bl.u0) u0 = bl.u1;
+    if (Math.abs(u1 - bl.u0) < snap && u1 <= bl.u1) u1 = bl.u0;
+  }
+  u0 = Math.round(u0 * 2) / 2;
+  u1 = Math.round(u1 * 2) / 2;
+  return u1 - u0 < 12 ? null : { u0, u1 };
+}
+
+function addRuns(layer, list) {
+  let last = null;
+  store.mutate((s) => {
+    for (const run of list) {
+      if (run.kind === 'wall') {
+        s.runs = s.runs.filter((r) => !(r.layer === layer && r.kind === 'wall' && r.wall === run.wall && r.u0 < run.u1 && r.u1 > run.u0));
+      }
+      last = s.nextId++;
+      s.runs.push({ id: last, layer, ...run });
+    }
+  });
+  ui.selectedRun = last;
+  render();
+}
+
 function handleRunStroke(pts) {
   const state = store.get();
   const derived = deriveRoom(state.room);
   if (!derived) return toast('Draw the room outline first.');
   const layer = layerOfTab();
   const depth = RULES[layer].depth;
+  const fr = wallFrames(derived.verts, state.room.construction);
+  const verts = strokeCorners(pts).map(toWorld);
+
+  // One swipe around a corner (down one wall, then along the next) makes a run on each wall,
+  // meeting in that corner.
+  if (verts.length >= 3) {
+    const ms = [];
+    let ok = true;
+    for (let i = 0; i < verts.length - 1 && ok; i++) {
+      if (dist(verts[i], verts[i + 1]) < 6) continue;
+      const m = matchWall(verts[i], verts[i + 1], fr, derived.orient, depth);
+      if (!m) {
+        ok = false;
+        break;
+      }
+      const prev = ms[ms.length - 1];
+      if (prev && prev.f.i === m.f.i) prev.ub = m.ub;
+      else ms.push({ ...m });
+    }
+    if (ok && ms.length >= 2) {
+      const n = fr.length;
+      const runs = ms.map((m) => ({ f: m.f, u0: Math.min(m.ua, m.ub), u1: Math.max(m.ua, m.ub) }));
+      for (let k = 0; k < runs.length - 1; k++) {
+        const a = runs[k];
+        const b = runs[k + 1];
+        if (b.f.i === (a.f.i + 1) % n) {
+          a.u1 = a.f.L;
+          b.u0 = 0;
+        } else if (b.f.i === (a.f.i - 1 + n) % n) {
+          a.u0 = 0;
+          b.u1 = b.f.L;
+        }
+      }
+      const made = [];
+      for (const r of runs) {
+        const t = finishWallRun(layer, state, derived, r.f, r.u0, r.u1);
+        if (t) made.push({ kind: 'wall', wall: r.f.i, ...t });
+      }
+      if (made.length) {
+        addRuns(layer, made);
+        if (made.length > 1) toast(`${made.length} runs, one along each wall, meeting in the corner.`);
+        return;
+      }
+    }
+  }
+
   const A = toWorld(pts[0]);
   const B = toWorld(pts[pts.length - 1]);
   const chord = dist(A, B);
   if (chord < 12) return toast('Drag a little further to draw a run.');
-  const fr = wallFrames(derived.verts, state.room.construction);
-  const proj = (P, f) => ({
-    u: (P.x - f.a.x) * f.d.x + (P.y - f.a.y) * f.d.y,
-    perp: (P.x - f.a.x) * f.n.x * derived.orient + (P.y - f.a.y) * f.n.y * derived.orient,
-  });
-  let best = null;
-  for (const f of fr) {
-    if (f.construction) continue;
-    const par = Math.abs((B.x - A.x) * f.d.x + (B.y - A.y) * f.d.y) / chord;
-    if (par < 0.9) continue;
-    const pa = proj(A, f);
-    const pb = proj(B, f);
-    const ok = (v) => v >= -24 && v <= depth + RULES.wallSnapOut;
-    if (!ok(pa.perp) || !ok(pb.perp)) continue;
-    const u0 = Math.min(pa.u, pb.u);
-    const u1 = Math.max(pa.u, pb.u);
-    if (u1 < 0 || u0 > f.L) continue;
-    const score = (Math.abs(pa.perp - depth / 2) + Math.abs(pb.perp - depth / 2)) / 2;
-    if (!best || score < best.score) best = { f, u0, u1, score };
-  }
-
-  let run = null;
+  const best = matchWall(A, B, fr, derived.orient, depth);
   if (best) {
-    const L = best.f.L;
-    let u0 = Math.max(0, best.u0);
-    let u1 = Math.min(L, best.u1);
-    const snap = RULES.snapDistance;
-    if (u0 < snap) u0 = 0;
-    if (L - u1 < snap) u1 = L;
-    for (const bl of wallBlockers(layer, state, derived, best.f.i)) {
-      if (Math.abs(u0 - bl.u1) < snap && u0 >= bl.u0) u0 = bl.u1;
-      if (Math.abs(u1 - bl.u0) < snap && u1 <= bl.u1) u1 = bl.u0;
-    }
-    u0 = Math.round(u0 * 2) / 2;
-    u1 = Math.round(u1 * 2) / 2;
-    if (u1 - u0 < 12) return toast('That run is too short. Drag further along the wall.');
-    run = { layer, kind: 'wall', wall: best.f.i, u0, u1 };
-  } else {
-    if (layer === 'upper') return toast('Uppers hang on walls. Drag along a wall.');
-    const dir = DIRS[dirIndex(B.x - A.x, B.y - A.y)];
-    const len = Math.round(chord);
-    if (len < 15) return toast('That island is too short.');
-    const a = { x: Math.round(A.x * 2) / 2, y: Math.round(A.y * 2) / 2 };
-    run = { layer, kind: 'free', a, b: { x: a.x + dir.x * len, y: a.y + dir.y * len } };
+    const t = finishWallRun(layer, state, derived, best.f, Math.min(best.ua, best.ub), Math.max(best.ua, best.ub));
+    if (!t) return toast('That run is too short. Drag further along the wall.');
+    return addRuns(layer, [{ kind: 'wall', wall: best.f.i, ...t }]);
   }
-  let id = null;
-  store.mutate((s) => {
-    if (run.kind === 'wall') {
-      s.runs = s.runs.filter((r) => !(r.layer === layer && r.kind === 'wall' && r.wall === run.wall && r.u0 < run.u1 && r.u1 > run.u0));
-    }
-    id = s.nextId++;
-    s.runs.push({ id, ...run });
-  });
-  ui.selectedRun = id;
-  render();
+  if (layer === 'upper') return toast('Uppers hang on walls. Drag along a wall.');
+  const dir = DIRS[dirIndex(B.x - A.x, B.y - A.y)];
+  const len = Math.round(chord);
+  if (len < 15) return toast('That island is too short.');
+  const a = { x: Math.round(A.x * 2) / 2, y: Math.round(A.y * 2) / 2 };
+  addRuns(layer, [{ kind: 'free', a, b: { x: a.x + dir.x * len, y: a.y + dir.y * len } }]);
 }
 
 function finishCabStroke(pts) {
@@ -961,17 +983,13 @@ function renameSketch() {
   return true;
 }
 
-async function saveSketch() {
-  if (!store.get().name && !renameSketch()) return;
-  const state = store.get();
-  const text = serializeSketch(state);
-  const name = fileNameFor(state);
-  const blob = new Blob([text], { type: 'application/json' });
-  const file = new File([blob], name, { type: 'application/json' });
-  // On a tablet the share sheet offers "Save to Files"; elsewhere it's a normal download.
+// Hands a file to the user: the share sheet on a tablet (it offers "Save to Files"), a normal
+// download elsewhere.
+async function deliver(blob, name, mime, title) {
+  const file = new File([blob], name, { type: mime });
   if (window.matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: state.name || 'Field sketch' });
+      await navigator.share({ files: [file], title });
       return toast('Saved.');
     } catch (err) {
       if (err && err.name === 'AbortError') return;
@@ -987,6 +1005,104 @@ async function saveSketch() {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
   toast(`Saved ${name}`);
 }
+
+async function saveSketch() {
+  if (!store.get().name && !renameSketch()) return;
+  const state = store.get();
+  const blob = new Blob([serializeSketch(state)], { type: 'application/json' });
+  await deliver(blob, fileNameFor(state), 'application/json', state.name || 'Field sketch');
+}
+
+// ---------- export (PDF / image) ----------
+
+function pageCss() {
+  let css = '';
+  for (const sheet of document.styleSheets) {
+    try {
+      for (const rule of sheet.cssRules) css += `${rule.cssText}\n`;
+    } catch {
+      // Cross-origin sheets can't be read; there are none here.
+    }
+  }
+  return css;
+}
+
+// Draws one tab's picture (walls and openings, lowers, or uppers) at a given size, as an image.
+async function planImage(tab, w, h, { jpeg = true, scale = 3 } = {}) {
+  const state = store.get();
+  const derived = deriveRoom(state.room);
+  if (!derived) return null;
+  const layouts = computeLayouts(state, derived);
+  const v = computeFit(state, derived, w, h);
+  const pui = { tab, active: null, selectedRun: null, selectedMarker: null, pending: null, print: true };
+  const inner = renderScene({ state, derived, view: v, ui: pui, layouts });
+  const svgText = `<svg xmlns="http://www.w3.org/2000/svg" width="${w * scale}" height="${h * scale}" viewBox="0 0 ${w} ${h}"><style>${pageCss()}</style><rect width="${w}" height="${h}" fill="#ffffff"/>${inner}</svg>`;
+  const url = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml' }));
+  const img = new Image();
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = () => reject(new Error('Could not draw the sketch.'));
+    img.src = url;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = w * scale;
+  canvas.height = h * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  URL.revokeObjectURL(url);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, jpeg ? 'image/jpeg' : 'image/png', 0.92));
+  return { blob, w: canvas.width, h: canvas.height, jpeg: new Uint8Array(await blob.arrayBuffer()) };
+}
+
+async function exportPdf() {
+  const state = store.get();
+  const derived = deriveRoom(state.room);
+  if (!derived) return toast('Draw the room first.');
+  if (!state.name && !renameSketch()) return;
+  toast('Making the PDF\u2026');
+  try {
+    const layouts = computeLayouts(store.get(), derived);
+    const report = buildReport(store.get(), derived, layouts);
+    const plans = {
+      room: await planImage('walls', 380, 462),
+      lower: report.lower.runs.length || report.appliances.length ? await planImage('lowers', 380, 462) : null,
+      upper: report.upper.runs.length ? await planImage('uppers', 380, 462) : null,
+    };
+    const bytes = buildSketchPdf(report, plans);
+    const cur = store.get();
+    await deliver(new Blob([bytes], { type: 'application/pdf' }), fileNameFor(cur, new Date(), '.pdf'), 'application/pdf', cur.name || 'Field sketch');
+  } catch (err) {
+    toast(err && err.message ? err.message : 'Could not make the PDF.');
+  }
+}
+
+async function exportImage() {
+  const state = store.get();
+  if (!deriveRoom(state.room)) return toast('Draw the room first.');
+  if (!state.name && !renameSketch()) return;
+  const tab = ui.tab === 'lowers' || ui.tab === 'uppers' ? ui.tab : 'walls';
+  try {
+    const plan = await planImage(tab, 1000, 720, { jpeg: false, scale: 2 });
+    const cur = store.get();
+    await deliver(plan.blob, fileNameFor(cur, new Date(), `-${tab}.png`), 'image/png', cur.name || 'Field sketch');
+  } catch (err) {
+    toast(err && err.message ? err.message : 'Could not make the image.');
+  }
+}
+
+$('export').addEventListener('click', () => {
+  $('sheet').hidden = false;
+});
+$('sheet').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-export]');
+  if (!b && e.target.id !== 'sheet') return;
+  $('sheet').hidden = true;
+  if (!b) return;
+  if (b.dataset.export === 'pdf') await exportPdf();
+  else if (b.dataset.export === 'png') await exportImage();
+});
 
 $('save').addEventListener('click', saveSketch);
 $('jobname').addEventListener('click', () => {

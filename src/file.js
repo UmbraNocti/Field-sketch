@@ -46,12 +46,12 @@ export function parseSketch(text) {
   return { state };
 }
 
-export function fileNameFor(state, now = new Date()) {
+export function fileNameFor(state, now = new Date(), ext = '.fieldsketch.json') {
   const base = (state.name || 'kitchen-sketch')
     .trim()
     .replace(/[^a-z0-9]+/gi, '-')
     .replace(/^-+|-+$/g, '')
     .toLowerCase() || 'kitchen-sketch';
   const d = now.toISOString().slice(0, 10);
-  return `${base}-${d}.fieldsketch.json`;
+  return `${base}-${d}${ext}`;
 }

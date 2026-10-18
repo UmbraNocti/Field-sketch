@@ -192,6 +192,35 @@ await page.waitForFunction(() => window.__fieldsketch.store.get().runs.length > 
 const after2 = await S();
 check('opening the file brings the cabinets back', after2.runs.length === before2.runs.length && after2.upper.crown === 3 && Object.keys(after2.cornerPicks).length === 1);
 
+// One swipe around an inside corner makes a run on each wall (not a diagonal).
+await page.evaluate((st) => localStorage.setItem('fieldsketch.v1', JSON.stringify(st)), preset);
+await page.reload();
+await page.waitForSelector('#canvas');
+await page.click('.tab[data-tab="lowers"]');
+{
+  const [a, b, c] = [await w2s(3, 12), await w2s(144, 12), await w2s(144, 117)];
+  await stroke([a, b, c]);
+  s = await S();
+  check('one swipe around a corner makes two runs, one per wall', s.runs.length === 2 && s.runs.map((r) => r.wall).sort().join() === '0,1');
+  check('neither run is a diagonal island', s.runs.every((r) => r.kind === 'wall'));
+  L = await layouts();
+  check('they meet in a blind corner', L.lower.flatMap((r) => r.boxes.filter((bx) => bx.k === 'corner')).length === 1);
+  check('and they do not overlap', L.lower.every((r) => r.boxes.every((bx, i, arr) => i === 0 || bx.u0 >= arr[i - 1].u1 - 1e-6)));
+}
+
+// Two swipes that meet near the corner also pair up instead of overlapping.
+await page.evaluate((st) => localStorage.setItem('fieldsketch.v1', JSON.stringify(st)), preset);
+await page.reload();
+await page.waitForSelector('#canvas');
+await page.click('.tab[data-tab="lowers"]');
+await dragWorld([3, 12], [150, 12]);
+await dragWorld([144, 18], [144, 117]);
+s = await S();
+check('two swipes near the corner both snap into it', s.runs.length === 2 && s.runs[0].u1 === 156 && s.runs[1].u0 === 0);
+L = await layouts();
+const second = L.lower.find((r) => r.id === s.runs[1].id);
+check('the second run stops short of the first one\'s cabinets', second.boxes[0].u0 >= 24 - 1e-6);
+
 check('no console or page errors', errors.length === 0);
 if (errors.length) console.log(errors);
 await browser.close();

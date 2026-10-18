@@ -4,6 +4,7 @@ import { FIELD_LABELS, openingFields } from './store.js';
 import { UTILITY_TYPES, APPLIANCE_TYPES, APPLIANCE_NAMES } from './rules.js';
 import { markerIcon, MARKER_NAMES, openingTitle, refLabel, positionInfo } from './render.js';
 import { sameField, getFieldValue, fieldTitle } from './fields.js';
+import { orderSummary } from './layout.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -129,7 +130,7 @@ function cabinetPanel(state, ui, layouts) {
       const sel = ui.selectedRun === rl.run.id;
       const where = rl.run.kind === 'wall' ? `W${rl.run.wall + 1}` : 'Island';
       const len = formatInches(rl.run.kind === 'wall' ? rl.run.u1 - rl.run.u0 : rl.frame.L);
-      const items = rl.boxes.map((b) => `<span class="cut ${b.kind}">${esc(b.label)}</span>`).join('');
+      const items = rl.boxes.map((b) => `<span class="cut ${b.kind}">${esc(b.label)}</span>`).join('') + (rl.extras || []).map((e) => `<span class="cut panel">+ ${esc(e)}</span>`).join('');
       const corners = rl.boxes.filter((b) => b.kind === 'corner');
       const extra = sel
         ? `<div class="sel-actions">${corners
@@ -141,11 +142,8 @@ function cabinetPanel(state, ui, layouts) {
         <div class="cuts">${items || '<em class="muted">nothing fits here</em>'}</div>${extra}</div>`;
     })
     .join('');
-  const counts = new Map();
-  for (const rl of lay.runs) for (const b of rl.boxes) counts.set(b.label, (counts.get(b.label) || 0) + 1);
-  const summary = [...counts.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
-    .map(([l, n]) => `${esc(l)} \u00d7${n}`)
+  const summary = orderSummary(lay)
+    .map((c) => `${esc(c.label)} \u00d7${c.count}`)
     .join(' \u00b7 ');
   const hint = lay.runs.length
     ? ''

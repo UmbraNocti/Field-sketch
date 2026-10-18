@@ -323,7 +323,7 @@ export function renderScene({ state, derived, view, ui, layouts }) {
   // Cabinets (lowers and uppers tabs).
   if (room && derived && layouts && (ui.tab === 'lowers' || ui.tab === 'uppers')) {
     if (ui.tab === 'lowers') {
-      for (const z of layouts.lower.zones) out += `<polygon class="zone" points="${polyStr(z, S)}"/>`;
+      if (!ui.print) for (const z of layouts.lower.zones) out += `<polygon class="zone" points="${polyStr(z, S)}"/>`;
       out += drawLayout(layouts.lower, S, view, ui, false, boxLabels);
     } else {
       out += drawLayout(layouts.lower, S, view, ui, true, boxLabels);
@@ -331,8 +331,9 @@ export function renderScene({ state, derived, view, ui, layouts }) {
     }
   }
 
-  // Markers on top.
+  // Markers on top. A printed cabinet page leaves them off so the box labels stay readable.
   for (const m of state.markers) {
+    if (ui.print && ui.tab !== 'walls') continue;
     const p = S(m);
     const sel = ui.selectedMarker === m.id ? ' selected' : '';
     if (m.type === 'column') {

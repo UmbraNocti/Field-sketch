@@ -16,7 +16,12 @@ function frameForRun(run, frames, orient) {
     const f = frames[run.wall];
     if (!f || f.construction) return null;
     const L = f.L;
-    return { a: f.a, d: f.d, n: { x: f.n.x * orient, y: f.n.y * orient }, L, u0: Math.max(0, Math.min(L, run.u0)), u1: Math.max(0, Math.min(L, run.u1)), wall: run.wall };
+    // A run that stops within a few inches of a corner is treated as reaching it.
+    let u0 = Math.max(0, Math.min(L, run.u0));
+    let u1 = Math.max(0, Math.min(L, run.u1));
+    if (u0 <= RULES.cornerReach) u0 = 0;
+    if (u1 >= L - RULES.cornerReach) u1 = L;
+    return { a: f.a, d: f.d, n: { x: f.n.x * orient, y: f.n.y * orient }, L, u0, u1, wall: run.wall };
   }
   const L = dist(run.a, run.b);
   if (L < 1) return null;
@@ -57,19 +62,21 @@ function blockersFor(layer, state, derived, wall, molding, notes) {
 }
 
 // Inside corners where two runs meet: one holds the blind corner cabinet, the other stops short.
-function cornerRoles(layer, runs, frames, orient, picks) {
+function cornerRoles(layer, runs, runFrames, frames, orient, picks) {
   const roles = new Map();
   const n = frames.length;
-  const wallRuns = runs.filter((r) => r.kind === 'wall' && frames[r.wall] && !frames[r.wall].construction);
+  const wallRuns = runs.filter((r) => r.kind === 'wall' && runFrames.get(r.id));
+  const ext = (r) => runFrames.get(r.id);
   for (const run of wallRuns) {
     const fi = frames[run.wall];
+    const er = ext(run);
     for (const end of ['start', 'end']) {
-      const atCorner = end === 'start' ? run.u0 <= EPS : run.u1 >= fi.L - EPS;
+      const atCorner = end === 'start' ? er.u0 <= EPS : er.u1 >= fi.L - EPS;
       if (!atCorner) continue;
       const j = end === 'start' ? (run.wall - 1 + n) % n : (run.wall + 1) % n;
       const fj = frames[j];
       if (!fj || fj.construction) continue;
-      const other = wallRuns.find((r) => r.wall === j && (end === 'start' ? r.u1 >= fj.L - EPS : r.u0 <= EPS));
+      const other = wallRuns.find((r) => r.wall === j && (end === 'start' ? ext(r).u1 >= fj.L - EPS : ext(r).u0 <= EPS));
       if (!other || other.id === run.id) continue;
       const first = end === 'start' ? fj : fi;
       const second = end === 'start' ? fi : fj;
@@ -114,6 +121,8 @@ function labelFor(layer, box) {
       return box.type === 'sink' ? `SB${size}` : `CB${size}`;
     case 'void':
       return box.type === 'range' ? `RNG ${size}` : `DW ${size}`;
+    case 'hood':
+      return `HOOD ${size}`;
     case 'tall':
       if (box.type === 'fridge') return `REF ${size}`;
       if (box.type === 'oven') return `OVN ${size}`;
@@ -138,10 +147,10 @@ export function computeLayout(layer, state, derived, lowerLayout) {
   const notes = [];
   const molding = layer === 'upper' ? Math.max((state.upper && state.upper.crown) || 0, (state.upper && state.upper.rail) || 0) : 0;
   const picks = state.cornerPicks || {};
-  const roles = cornerRoles(layer, runs, frames, orient, picks);
   const out = { layer, runs: [], zones: [], notes, tall: new Map(), markerBoxes: new Map() };
 
-  const appliances = state.markers.filter((m) => APPLIANCE_TYPES.includes(m.type) && (layer === 'lower' || MARKER_KIND[m.type] === 'tall' || m.type === 'pantry'));
+  // Uppers care about the full-height pieces, the pantry, and the blank place over the range.
+  const appliances = state.markers.filter((m) => APPLIANCE_TYPES.includes(m.type) && (layer === 'lower' || MARKER_KIND[m.type] === 'tall' || m.type === 'pantry' || m.type === 'range'));
   const utilities = state.markers.filter((m) => UTILITY_TYPES.includes(m.type));
 
   // Frames for every run, then give each appliance marker to the run it sits against.
@@ -151,6 +160,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
     if (fr) runFrames.set(run.id, fr);
     else notes.push({ level: 'warn', text: 'A cabinet run is on a wall that is now open. Delete it or redraw it.', runId: run.id });
   }
+  const roles = cornerRoles(layer, runs, runFrames, frames, orient, picks);
   const assigned = new Map();
   const placedMarkers = new Set();
   for (const m of appliances) {
@@ -246,7 +256,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
         const item = { id: mk.m.id, type: mk.m.type, kind, width, center, points: [center, ...touched], touched: touched.length > 0 };
         if (layer === 'upper') {
           // Full-height pieces sit in the same place as in the lowers.
-          const lb = lowerLayout && lowerLayout.tall.get(mk.m.id);
+          const lb = lowerLayout && lowerLayout.markerBoxes.get(mk.m.id);
           const left = lb && run.kind === 'wall' && lb.wall === run.wall ? lb.u0 : mk.u - width / 2;
           item.fixedAt = left - seg.lo;
         }
@@ -303,15 +313,23 @@ export function computeLayout(layer, state, derived, lowerLayout) {
       }
 
       // Fridge panels go on any side that isn't a wall, a corner, or another full-height cabinet.
-      const wallStart = first && run.kind === 'wall' && run.u0 <= EPS;
-      const wallEnd = last && run.kind === 'wall' && run.u1 >= fr.L - EPS;
+      const wallStart = first && run.kind === 'wall' && fr.u0 <= EPS;
+      const wallEnd = last && run.kind === 'wall' && fr.u1 >= fr.L - EPS;
       segBoxes.forEach((b, i) => {
-        if (b.kind !== 'tall' || b.type !== 'fridge') return;
         const prev = segBoxes[i - 1];
         const next = segBoxes[i + 1];
-        const closedL = prev ? prev.kind === 'tall' || prev.kind === 'corner' : first && (wallStart || !!sb);
-        const closedR = next ? next.kind === 'tall' || next.kind === 'corner' : last && (wallEnd || !!eb);
-        b.panels = { left: !closedL, right: !closedR };
+        if (b.kind === 'tall' && b.type === 'fridge') {
+          const closedL = prev ? prev.kind === 'tall' || prev.kind === 'corner' : first && (wallStart || !!sb);
+          const closedR = next ? next.kind === 'tall' || next.kind === 'corner' : last && (wallEnd || !!eb);
+          b.panels = { left: !closedL, right: !closedR };
+        } else if (layer === 'lower' && b.kind === 'void' && b.type === 'dishwasher') {
+          // A dishwasher needs an end panel only where it is the end of the cabinets (a range doesn't).
+          const closedL = prev ? true : first && (wallStart || !!sb);
+          const closedR = next ? true : last && (wallEnd || !!eb);
+          if (!closedL || !closedR) b.panels = { left: !closedL, right: !closedR };
+        }
+        // Over the range the uppers leave a blank place for the hood.
+        if (layer === 'upper' && b.kind === 'void' && b.type === 'range') b.kind = 'hood';
       });
       boxes.push(...segBoxes);
     });
@@ -331,13 +349,21 @@ export function computeLayout(layer, state, derived, lowerLayout) {
       b.depth = b.kind === 'tall' ? RULES.lower.depth : depth;
       b.poly = [at(fr, b.u0), at(fr, b.u1), at(fr, b.u1, b.depth), at(fr, b.u0, b.depth)];
       if (b.kind === 'gap') notes.push({ level: 'warn', text: `${fmt(b.size)}" left over in Run ${runIndex + 1}.`, runId: run.id });
-      if (b.id != null && (b.kind === 'tall' || b.kind === 'void' || b.kind === 'flex')) {
+      if (b.id != null && (b.kind === 'tall' || b.kind === 'void' || b.kind === 'flex' || b.kind === 'hood')) {
+        b.wall = run.kind === 'wall' ? run.wall : null;
         out.markerBoxes.set(b.id, b);
         if (b.kind === 'tall') out.tall.set(b.id, { wall: run.kind === 'wall' ? run.wall : null, u0: b.u0, u1: b.u1 });
       }
     });
     for (const b of boxes) if (b.kind === 'corner') b.cornerWalls = (b.side === 'start' ? sr : er).walls;
-    out.runs.push({ run, index: runIndex + 1, frame: fr, depth, boxes, cut: boxes.map((b) => b.label) });
+    const extras = [];
+    for (const b of boxes) {
+      if (!b.panels) continue;
+      const name = b.type === 'fridge' ? 'Fridge panel' : 'Dishwasher end panel';
+      if (b.panels.left) extras.push(name);
+      if (b.panels.right) extras.push(name);
+    }
+    out.runs.push({ run, index: runIndex + 1, frame: fr, depth, boxes, extras, cut: boxes.map((b) => b.label) });
   });
 
   if (layer === 'lower') {
@@ -416,4 +442,21 @@ export function computeLayouts(state, derived) {
   const upper = computeLayout('upper', state, derived, lower);
   cache = { sig, value: { lower, upper } };
   return cache.value;
+}
+
+// What would go on an order: cabinets, corner cabinets, sink/cooktop bases, tall cabinets (not the
+// fridge itself), fillers and panels. Appliance openings, hood places and gaps are left out.
+export function orderSummary(layout) {
+  const counts = new Map();
+  const add = (label) => counts.set(label, (counts.get(label) || 0) + 1);
+  for (const rl of layout.runs) {
+    for (const b of rl.boxes) {
+      const orderable = ['base', 'corner', 'flex', 'filler'].includes(b.kind) || (b.kind === 'tall' && b.type !== 'fridge');
+      if (orderable) add(b.label);
+    }
+    for (const e of rl.extras || []) add(e);
+  }
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 }

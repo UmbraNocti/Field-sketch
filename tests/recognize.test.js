@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyStroke, wallFrames, findLineCrossing, arcToDoor, constructionTargets, hitWall } from '../src/recognize.js';
+import { classifyStroke, wallFrames, findLineCrossing, arcToDoor, constructionTargets, hitWall, strokeCorners } from '../src/recognize.js';
 import { buildVerts } from '../src/geometry.js';
 
 // A 120" x 96" room: walls run east, south, west, north starting at the origin.
@@ -92,4 +92,17 @@ test('big, shaky arcs still read as arcs; an S curve does not', () => {
   const s = [];
   for (let i = 0; i <= 60; i++) s.push({ x: i * 4, y: 40 * Math.sin((i / 60) * Math.PI * 2) });
   assert.notEqual(classifyStroke(s).type, 'arc');
+});
+
+test('a swipe down one wall and along the next comes back as three corner points', () => {
+  const l = [...line({ x: 100, y: 100 }, { x: 400, y: 104 }, 40), ...line({ x: 400, y: 104 }, { x: 404, y: 300 }, 30)];
+  const c = strokeCorners(l);
+  assert.equal(c.length, 3);
+  assert.ok(Math.abs(c[1].x - 400) < 12 && Math.abs(c[1].y - 104) < 12);
+  assert.equal(strokeCorners(line({ x: 0, y: 0 }, { x: 300, y: 6 })).length, 2);
+});
+
+test('a wobble near a corner does not create an extra turn', () => {
+  const l = [...line({ x: 100, y: 100 }, { x: 396, y: 100 }, 40), ...line({ x: 396, y: 100 }, { x: 404, y: 108 }, 4), ...line({ x: 404, y: 108 }, { x: 404, y: 300 }, 30)];
+  assert.equal(strokeCorners(l).length, 3);
 });

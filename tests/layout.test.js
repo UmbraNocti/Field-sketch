@@ -184,8 +184,67 @@ test('full-height pieces sit in the same place in the uppers as in the lowers', 
   near(uf.u0, lf.u0);
   near(uf.u1, lf.u1);
   // Appliances that aren't full height don't show up in the uppers.
-  s.markers.push({ id: 92, type: 'range', x: 30, y: 12, w: 30 });
-  assert.ok(!computeLayouts(s, d).upper.runs[0].boxes.some((b) => b.type === 'range'));
+  s.markers.push({ id: 92, type: 'sink', x: 30, y: 12, w: 24 });
+  assert.ok(!computeLayouts(s, d).upper.runs[0].boxes.some((b) => b.type === 'sink'));
+});
+
+test('over the range the uppers leave a blank place the width of the range, for the hood', () => {
+  const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156), wallRun(2, 'upper', 0, 0, 156)] });
+  s.markers.push({ id: 92, type: 'range', x: 100, y: 12, w: 30 }, { id: 93, type: 'gas', x: 100, y: 6 });
+  const d = deriveRoom(s.room);
+  const { lower, upper } = computeLayouts(s, d);
+  const lr = lower.runs[0].boxes.find((b) => b.type === 'range');
+  const hood = upper.runs[0].boxes.find((b) => b.kind === 'hood');
+  assert.ok(hood, 'a hood place exists');
+  near(hood.u0, lr.u0);
+  near(hood.u1, lr.u1);
+  assert.match(hood.label, /^HOOD 30/);
+  near(upper.runs[0].boxes.reduce((t, b) => t + b.size, 0), 156);
+});
+
+test('a dishwasher that ends the cabinets gets an end panel on that side; a range never does', () => {
+  const s = kitchen({ runs: [wallRun(1, 'lower', 0, 40, 79)] });
+  s.markers.push({ id: 1, type: 'dishwasher', x: 72, y: 12, w: 24 }, { id: 2, type: 'outlet', x: 72, y: 6 });
+  const lay = run(s);
+  const boxes = lay.runs[0].boxes;
+  const dw = boxes.find((b) => b.type === 'dishwasher');
+  assert.equal(dw, boxes[boxes.length - 1]);
+  assert.deepEqual(dw.panels, { left: false, right: true });
+  assert.deepEqual(lay.runs[0].extras, ['Dishwasher end panel']);
+
+  const r = kitchen({ runs: [wallRun(1, 'lower', 0, 40, 79)] });
+  r.markers.push({ id: 3, type: 'range', x: 72, y: 12, w: 24 }, { id: 4, type: 'gas', x: 72, y: 6 });
+  const rl = run(r);
+  assert.equal(rl.runs[0].boxes.find((b) => b.type === 'range').panels, undefined);
+  assert.deepEqual(rl.runs[0].extras, []);
+});
+
+test('no panel on a dishwasher with cabinets on both sides, or one against a wall', () => {
+  const mid = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156)] });
+  mid.markers.push({ id: 1, type: 'dishwasher', x: 78, y: 12, w: 24 }, { id: 2, type: 'outlet', x: 78, y: 6 });
+  assert.equal(run(mid).runs[0].boxes.find((b) => b.type === 'dishwasher').panels, undefined);
+  const wall = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156)] });
+  wall.markers.push({ id: 1, type: 'dishwasher', x: 150, y: 12, w: 24 }, { id: 2, type: 'outlet', x: 150, y: 6 });
+  assert.equal(run(wall).runs[0].boxes.find((b) => b.type === 'dishwasher').panels, undefined);
+});
+
+test('a dishwasher that ends the cabinets at a doorway gets the panel on the doorway side', () => {
+  const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156)] });
+  s.room.openings.push(door(0, 0.5));
+  s.markers.push({ id: 1, type: 'dishwasher', x: 50, y: 12, w: 24 }, { id: 2, type: 'outlet', x: 50, y: 6 });
+  const dw = run(s).runs[0].boxes.find((b) => b.type === 'dishwasher');
+  assert.deepEqual(dw.panels, { left: false, right: true });
+});
+
+test('runs that stop a little short of a corner still pair up there instead of overlapping', () => {
+  const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 140), wallRun(2, 'lower', 1, 12, 120)] });
+  const lay = run(s);
+  const corners = lay.runs.flatMap((r) => r.boxes.filter((b) => b.kind === 'corner'));
+  assert.equal(corners.length, 1);
+  const second = lay.runs.find((r) => r.run.id === 2);
+  assert.ok(second.boxes[0].u0 >= 24 - 1e-6, `second run starts at ${second.boxes[0].u0}`);
+  const first = lay.runs.find((r) => r.run.id === 1);
+  near(first.boxes[first.boxes.length - 1].u1, 156);
 });
 
 test('an island closer than 36" to the cabinets is flagged', () => {

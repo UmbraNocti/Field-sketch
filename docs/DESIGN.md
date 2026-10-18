@@ -33,7 +33,7 @@ Primary user: a cabinet specialist at 84 Lumber (Knoxville). Main lines sold: 19
 
 All the numbers live in `src/rules.js`, marked CONFIRMED or PLACEHOLDER. Changing a rule means editing a number there.
 
-**Drawing cabinets.** With the Cabinets pencil, drag along a wall (or a little in front of it) to make a run. Ends within 18" of a wall corner snap to it; ends near a door or window snap to its clearance edge. Dragging in open floor on the Lowers tab makes an island (boxes extend to the right of the drag direction). Uppers only hang on walls. Redrawing over a run on the same wall replaces it. Tap a box to select its run (delete it from the panel).
+**Drawing cabinets.** With the Cabinets pencil, drag along a wall (or a little in front of it) to make a run. Ends within 30" of a wall corner snap into it; ends within 18" of a door or window's clearance edge snap to it. One swipe that turns a corner (down one wall, then along the next) makes a run on each wall, meeting in that corner. Two separate swipes that both end near the same corner pair up the same way, so they never overlap. Dragging in open floor on the Lowers tab makes an island (boxes extend to the right of the drag direction). Uppers only hang on walls. Redrawing over a run on the same wall replaces it. Tap a box to select its run (delete it from the panel).
 
 **What the fill does, in priority order.**
 1. Hard constraints: appliance widths, touching the right hookup, dishwasher within 36" of the sink, a leftover that can be covered.
@@ -53,14 +53,16 @@ All the numbers live in `src/rules.js`, marked CONFIRMED or PLACEHOLDER. Changin
 - Dishwasher and range are fixed-width voids (drawn with an X). Fridge and oven are fixed-width full-height cabinets with the same position in the uppers. Sink and cooktop are boxes at least as wide as the marker. A pantry marker makes the box under it full height (also in the uppers).
 - Each asks how wide when dropped; skipping keeps the usual size (sink 24, cooktop 30, range 30, fridge 36, oven 30, dishwasher 24).
 - An appliance touching a hookup stays on it. With none touching it can shift up to one width. A missing hookup flags "no hookups marked" and is still placed. Range, oven and cooktop use 220V or gas; fridge and dishwasher use the 120V outlet; the sink uses plumbing.
-- A fridge gets panels on any side that is not a wall, a corner or another full-height cabinet.
+- A fridge gets panels on any side that is not a wall, a corner or another full-height cabinet. A dishwasher gets an end panel only where it is the end of the cabinets (nothing after it and no wall or corner); a range never does.
 - "No dishwasher marked" is shown when there are lowers and no dishwasher marker. Nothing is added automatically.
 
 **Islands.** A red zone is drawn 36" in front of every wall run of lowers. An island closer than that to the cabinets across from it is outlined in red and flagged.
 
-**Uppers.** The lowers show faintly underneath. Upper height, crown and light rail are set in the bottom-left corner of the drawing (crown and light rail default to 0 = none).
+**Uppers.** Over a range the uppers leave a blank place the width of the range, labeled HOOD (what goes there is a design decision made later). The lowers show faintly underneath. Upper height, crown and light rail are set in the bottom-left corner of the drawing (crown and light rail default to 0 = none).
 
-**Order summary.** The panel lists every box in each run in order (for example `B33 B30 SB24 B33 BBC36`) and counts of each, as the rough list to build the order from in Syncly.
+**Order summary.** The panel lists every box in each run in order (for example `B33 B30 SB24 B33 BBC36`) and counts of each, as the rough list to build the order from in Syncly. Appliance openings, hood places and gaps are not counted; fillers and panels are.
+
+**Export.** The top bar's Export makes a letter-size landscape **PDF** (or a PNG of the current tab). Page 1 is the room with every door and window spelled out in a list beside it: rough opening, casing to casing, position (and what it is measured from), sill height, window height, and the swing of each door. Under that: ceiling height, every wall length (measured ones plain, estimated ones marked ~), and where each outlet, gas, plumbing, vent and column marker sits (wall, distance from a corner, distance off the wall). Then a Lowers page (appliances, runs, notes, order summary) and an Uppers page (height, crown, light rail, runs, summary), when there is anything on them. Long lists continue on another page. The PDF is written in the app itself, so it works offline.
 
 ### Placeholders to replace (from real catalogs and jobs)
 
@@ -78,11 +80,10 @@ All the numbers live in `src/rules.js`, marked CONFIRMED or PLACEHOLDER. Changin
 
 ### Not built yet / questions
 - A 72" open run comes out as two 36s (fewest boxes). The earlier example was three 24s. Which is wanted? That is a rule about preferred sizes, not about the count.
-- Hood or cabinet over the range, end panels beside a dishwasher or range, and a hood-vent clearance for uppers.
-- Which wall gets the blind corner by default (currently the run drawn first).
-- Per-box overrides (resize or swap one cabinet by hand) and 12" spice/specialty boxes.
-- Angled (45 degree) corners and outside corners.
-- Export of a clean image or PDF.
+- Which wall gets the blind corner by default (currently the run drawn first; the panel can move it).
+- Hood over a cooktop (only ranges get the blank hood place so far).
+- Outside (protruding) corners and 45 degree corners get no special treatment: runs just end where they are drawn and can be snapped together by drawing one direction then the other.
+- Not planned: resizing individual boxes by hand. This is a layout sketch; the exact cabinet choices happen in the design software.
 
 ## Layout
 
