@@ -58,7 +58,7 @@ All the numbers live in `src/rules.js`, marked CONFIRMED or PLACEHOLDER. Changin
 
 **Islands.** A red zone is drawn 36" in front of every wall run of lowers. An island closer than that to the cabinets across from it is outlined in red and flagged.
 
-**Uppers.** Over a range the uppers leave a blank place the width of the range, labeled HOOD (what goes there is a design decision made later). The lowers show faintly underneath. Upper height, crown and light rail are set in the bottom-left corner of the drawing (crown and light rail default to 0 = none).
+**Uppers.** Over a range or cooktop the uppers leave a blank place the width of the appliance (centered over it), labeled HOOD (what goes there is a design decision made later). The lowers show faintly underneath. Upper height, crown and light rail are set in the bottom-left corner of the drawing (crown and light rail default to 0 = none).
 
 **Order summary.** The panel lists every box in each run in order (for example `B33 B30 SB24 B33 BBC36`) and counts of each, as the rough list to build the order from in Syncly. Appliance openings, hood places and gaps are not counted; fillers and panels are.
 
@@ -81,7 +81,6 @@ All the numbers live in `src/rules.js`, marked CONFIRMED or PLACEHOLDER. Changin
 ### Not built yet / questions
 - A 72" open run comes out as two 36s (fewest boxes). The earlier example was three 24s. Which is wanted? That is a rule about preferred sizes, not about the count.
 - Which wall gets the blind corner by default (currently the run drawn first; the panel can move it).
-- Hood over a cooktop (only ranges get the blank hood place so far).
 - Outside (protruding) corners and 45 degree corners get no special treatment: runs just end where they are drawn and can be snapped together by drawing one direction then the other.
 - Not planned: resizing individual boxes by hand. This is a layout sketch; the exact cabinet choices happen in the design software.
 

@@ -35,7 +35,7 @@ It's a static web app with no build step and no accounts. Everything is saved in
 
 **Lowers tab:** pick the Cabinets pencil and drag along a wall; the boxes fill in using the rules in `src/rules.js` (see the design notes). Swipe around an inside corner to make a run on each wall. Drop appliance markers (sink, cooktop, range, fridge, oven, dishwasher, pantry) to steer the layout; each asks how wide. Tap a blind corner cabinet to cycle its size. Tap a box to select its run and delete it. Drag in open floor for an island; the red band shows where islands can't go. The panel lists each run's boxes in order, notes like "no dishwasher marked", and an order summary.
 
-**Uppers tab:** same drag-along-a-wall, over a faint copy of the lowers, with a blank place for the hood over the range. Set upper height, crown and light rail in the bottom-left corner; crown and light rail leave extra room next to windows and doors.
+**Uppers tab:** same drag-along-a-wall, over a faint copy of the lowers, with a blank place for the hood over a range or cooktop. Set upper height, crown and light rail in the bottom-left corner; crown and light rail leave extra room next to windows and doors.
 
 Pinch to zoom and drag with two fingers to pan. **Fit** re-centers.
 

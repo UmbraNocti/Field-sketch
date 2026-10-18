@@ -149,8 +149,8 @@ export function computeLayout(layer, state, derived, lowerLayout) {
   const picks = state.cornerPicks || {};
   const out = { layer, runs: [], zones: [], notes, tall: new Map(), markerBoxes: new Map() };
 
-  // Uppers care about the full-height pieces, the pantry, and the blank place over the range.
-  const appliances = state.markers.filter((m) => APPLIANCE_TYPES.includes(m.type) && (layer === 'lower' || MARKER_KIND[m.type] === 'tall' || m.type === 'pantry' || m.type === 'range'));
+  // Uppers care about the full-height pieces, the pantry, and the blank place over a range or cooktop.
+  const appliances = state.markers.filter((m) => APPLIANCE_TYPES.includes(m.type) && (layer === 'lower' || MARKER_KIND[m.type] === 'tall' || m.type === 'pantry' || m.type === 'range' || m.type === 'cooktop'));
   const utilities = state.markers.filter((m) => UTILITY_TYPES.includes(m.type));
 
   // Frames for every run, then give each appliance marker to the run it sits against.
@@ -228,7 +228,8 @@ export function computeLayout(layer, state, derived, lowerLayout) {
       const items = [];
       const pantries = [];
       for (const mk of mine) {
-        const kind = MARKER_KIND[mk.m.type];
+        // In the uppers a cooktop is just a blank place for the hood, the same as a range.
+        const kind = layer === 'upper' && mk.m.type === 'cooktop' ? 'void' : MARKER_KIND[mk.m.type];
         if (kind === 'pantry') {
           pantries.push(mk);
           continue;
@@ -257,8 +258,8 @@ export function computeLayout(layer, state, derived, lowerLayout) {
         if (layer === 'upper') {
           // Full-height pieces sit in the same place as in the lowers.
           const lb = lowerLayout && lowerLayout.markerBoxes.get(mk.m.id);
-          const left = lb && run.kind === 'wall' && lb.wall === run.wall ? lb.u0 : mk.u - width / 2;
-          item.fixedAt = left - seg.lo;
+          const centre = lb && run.kind === 'wall' && lb.wall === run.wall ? (lb.u0 + lb.u1) / 2 : mk.u;
+          item.fixedAt = centre - width / 2 - seg.lo;
         }
         if (kind === 'flex') {
           item.target = center;
@@ -329,7 +330,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
           if (!closedL || !closedR) b.panels = { left: !closedL, right: !closedR };
         }
         // Over the range the uppers leave a blank place for the hood.
-        if (layer === 'upper' && b.kind === 'void' && b.type === 'range') b.kind = 'hood';
+        if (layer === 'upper' && b.kind === 'void' && (b.type === 'range' || b.type === 'cooktop')) b.kind = 'hood';
       });
       boxes.push(...segBoxes);
     });

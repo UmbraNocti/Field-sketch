@@ -202,6 +202,22 @@ test('over the range the uppers leave a blank place the width of the range, for 
   near(upper.runs[0].boxes.reduce((t, b) => t + b.size, 0), 156);
 });
 
+test('a cooktop gets the same blank hood place as a range, as wide as the cooktop and centered over it', () => {
+  const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156), wallRun(2, 'upper', 0, 0, 156)] });
+  s.markers.push({ id: 92, type: 'cooktop', x: 100, y: 12, w: 30 }, { id: 93, type: 'gas', x: 100, y: 6 });
+  const d = deriveRoom(s.room);
+  const { lower, upper } = computeLayouts(s, d);
+  const box = lower.runs[0].boxes.find((b) => b.type === 'cooktop');
+  const hood = upper.runs[0].boxes.find((b) => b.kind === 'hood');
+  assert.ok(box && hood);
+  near(hood.size, 30);
+  near((hood.u0 + hood.u1) / 2, (box.u0 + box.u1) / 2);
+  assert.match(hood.label, /^HOOD 30/);
+  near(upper.runs[0].boxes.reduce((t, b) => t + b.size, 0), 156);
+  // The cooktop itself never shows up as a box in the uppers.
+  assert.ok(!upper.runs[0].boxes.some((b) => b.type === 'cooktop'));
+});
+
 test('a dishwasher that ends the cabinets gets an end panel on that side; a range never does', () => {
   const s = kitchen({ runs: [wallRun(1, 'lower', 0, 40, 79)] });
   s.markers.push({ id: 1, type: 'dishwasher', x: 72, y: 12, w: 24 }, { id: 2, type: 'outlet', x: 72, y: 6 });
