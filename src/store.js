@@ -29,6 +29,7 @@ export function blankState() {
     runs: [],
     cornerPicks: {},
     upper: { height: null, crown: 0, rail: 0 },
+    kitchen: { cooks: 1 },
   };
 }
 
@@ -143,6 +144,7 @@ export function normalizeState(raw) {
     runs,
     cornerPicks,
     upper,
+    kitchen: { cooks: raw.kitchen && raw.kitchen.cooks === 2 ? 2 : 1 },
   };
 }
 

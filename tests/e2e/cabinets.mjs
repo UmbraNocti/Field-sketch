@@ -88,7 +88,7 @@ const layouts = () =>
   });
 
 await page.click('.tab[data-tab="lowers"]');
-check('the Lowers tab shows the cabinet pencil and appliance tools', (await page.locator('#tray [data-cab]').count()) === 9);
+check('the Lowers tab shows the cabinet pencil and appliance tools', (await page.locator('#tray [data-cab]').count()) === 11);
 
 // Run along the whole top wall, drawn a little inside the wall.
 await dragWorld([3, 12], [153, 12]);
@@ -138,12 +138,28 @@ L = await layouts();
 const corners = L.lower.flatMap((r) => r.boxes.filter((b) => b.k === 'corner'));
 check('exactly one blind corner cabinet', corners.length === 1);
 const before = corners[0].l;
-await tapWorld((corners[0].u0 + corners[0].u1) / 2, 12);
+await tapWorld(corners[0].u1 - 6, 12);
 L = await layouts();
-const after = L.lower.flatMap((r) => r.boxes.filter((b) => b.k === 'corner'))[0].l;
-check(`tapping the corner cycles its size (${before} -> ${after})`, before !== after);
+const diag = L.lower.flatMap((r) => r.boxes.filter((b) => b.k === 'diag'));
+check(`tapping the corner goes blind ${before} -> diagonal ${diag[0] && diag[0].l}`, diag.length === 1 && diag[0].l === 'DC36' && !L.lower.some((r) => r.boxes.some((b) => b.k === 'corner')));
 s = await S();
 check('the choice is saved', Object.keys(s.cornerPicks).length === 1);
+// Tapping the diagonal goes on to the next blind size, then round again.
+const centre = await page.evaluate(async () => {
+  const st = await import('./src/store.js');
+  const lay = await import('./src/layout.js');
+  const state = window.__fieldsketch.store.get();
+  const l = lay.computeLayouts(state, st.deriveRoom(state.room));
+  const b = l.lower.runs.flatMap((r) => r.boxes).find((x) => x.kind === 'diag');
+  return { x: b.poly.reduce((t, q) => t + q.x, 0) / b.poly.length, y: b.poly.reduce((t, q) => t + q.y, 0) / b.poly.length };
+});
+await tapWorld(centre.x, centre.y);
+L = await layouts();
+check('next tap gives the 39 blind corner', L.lower.some((r) => r.boxes.some((b) => b.k === 'corner' && /39/.test(b.l))));
+await tapWorld(144, 12);
+await tapWorld(144, 12);
+L = await layouts();
+check('and it cycles back round to the blind 36', L.lower.some((r) => r.boxes.some((b) => b.k === 'corner' && b.l === 'BBC36')));
 
 // Delete a run from the panel.
 await tapWorld(144, 70);
@@ -220,6 +236,23 @@ check('two swipes near the corner both snap into it', s.runs.length === 2 && s.r
 L = await layouts();
 const second = L.lower.find((r) => r.id === s.runs[1].id);
 check('the second run stops short of the first one\'s cabinets', second.boxes[0].u0 >= 24 - 1e-6);
+
+// Rules tab, waste and microwave markers, cooks toggle.
+await page.click('.tab[data-tab="checklist"]');
+check('the Rules tab lists the kitchen rules', (await page.locator('.rule').count()) >= 15);
+check('rules are grouped by need', (await page.locator('.panel-scroll h3').allInnerTexts()).some((t) => /check these/i.test(t)));
+await page.click('.tab[data-tab="lowers"]');
+check('the Lowers tab says how many rules need attention', (await page.locator('.rules-banner').count()) === 1);
+const cooks0 = await page.locator('#corner [data-act="cooks"] b').innerText();
+await page.click('#corner [data-act="cooks"]');
+check('the cooks chip toggles one / more than one', (await page.locator('#corner [data-act="cooks"] b').innerText()) !== cooks0 && (await S()).kitchen.cooks === 2);
+await page.click('.tab[data-tab="uppers"]');
+check('the Uppers tab offers the microwave', (await page.locator('#tray [data-cab="microwave"]').count()) === 1);
+await page.click('[data-cab="microwave"]');
+await tapWorld(40, 10);
+await page.click('[data-act="next"]');
+s = await S();
+check('a microwave marker is placed with its width', s.markers.some((m) => m.type === 'microwave' && m.w === 30));
 
 check('no console or page errors', errors.length === 0);
 if (errors.length) console.log(errors);

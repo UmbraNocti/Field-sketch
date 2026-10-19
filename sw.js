@@ -1,5 +1,5 @@
 // Offline cache: the app is static files, so cache them all and refresh in the background.
-const CACHE = 'field-sketch-v4';
+const CACHE = 'field-sketch-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -18,6 +18,7 @@ const ASSETS = [
   './src/rules.js',
   './src/fill.js',
   './src/layout.js',
+  './src/checks.js',
   './src/viewfit.js',
   './src/report.js',
   './src/pdf.js',

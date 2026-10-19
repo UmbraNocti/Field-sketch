@@ -76,17 +76,90 @@ test('two runs meeting at an inside corner: one blind corner cabinet, the other 
   assert.equal(corners.length, 1);
   const first = lay.runs.find((r) => r.run.id === 1);
   const second = lay.runs.find((r) => r.run.id === 2);
-  assert.equal(first.boxes[first.boxes.length - 1].kind, 'corner'); // holder: lower id
+  assert.ok(first.boxes.some((b) => b.kind === 'corner')); // holder: lower id
   near(second.boxes[0].u0, 24); // the other run starts a cabinet depth in
   near(second.boxes[second.boxes.length - 1].u1, 120);
+  near(first.boxes[first.boxes.length - 1].u1, 156);
+  near(first.boxes.reduce((t, b) => t + b.size, 0), 156);
 });
 
-test('tapping a corner cycles its size; the corner can move to the other wall', () => {
+test('a blind corner is centered on the other run\'s face line, so it sits in from the corner with a filler', () => {
+  for (const [opt, width] of [[0, 36], [2, 39], [3, 42]]) {
+    const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156), wallRun(2, 'lower', 1, 0, 120)], cornerPicks: { 'lower:1': { wall: 0, opt } } });
+    const first = run(s).runs.find((r) => r.run.id === 1);
+    const blind = first.boxes.find((b) => b.kind === 'corner');
+    near(blind.size, width);
+    // The box's center is 24" (the other run's depth) from the corner end of the wall.
+    near(156 - (blind.u0 + blind.u1) / 2, 24);
+    const filler = first.boxes[first.boxes.length - 1];
+    assert.equal(filler.kind, 'filler');
+    near(filler.size, 24 - width / 2);
+  }
+});
+
+test('the diagonal corner has a leg along each wall and a 45 degree front, and both runs start a leg in', () => {
+  const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156), wallRun(2, 'lower', 1, 0, 120)], cornerPicks: { 'lower:1': { wall: 0, opt: 1 } } });
+  const lay = run(s);
+  const diag = lay.runs.flatMap((r) => r.boxes.filter((b) => b.kind === 'diag'));
+  assert.equal(diag.length, 1);
+  assert.equal(diag[0].label, 'DC36');
+  assert.equal(diag[0].poly.length, 5);
+  // The corner is the top-right (156, 0): legs run 36" left along the top wall and 36" down the right wall.
+  const xs = diag[0].poly.map((p) => Math.round(p.x));
+  const ys = diag[0].poly.map((p) => Math.round(p.y));
+  assert.equal(Math.min(...xs), 120);
+  assert.equal(Math.max(...xs), 156);
+  assert.equal(Math.min(...ys), 0);
+  assert.equal(Math.max(...ys), 36);
+  // The front face is a 45 degree line: (120+... ) the two front points differ equally in x and y.
+  const [, , a, b] = diag[0].poly;
+  near(Math.abs(a.x - b.x), Math.abs(a.y - b.y), 1e-6);
+  const first = lay.runs.find((r) => r.run.id === 1);
+  const second = lay.runs.find((r) => r.run.id === 2);
+  const plain = first.boxes.filter((b) => b.kind !== 'diag');
+  near(plain[plain.length - 1].u1, 120, 1e-6);
+  near(second.boxes[0].u0, 36, 1e-6);
+  assert.ok(!lay.runs.some((r) => r.boxes.some((b) => b.kind === 'corner')));
+});
+
+test('uppers get a 24 inch diagonal', () => {
+  const s = kitchen({ runs: [wallRun(1, 'upper', 0, 0, 156), wallRun(2, 'upper', 1, 0, 120)], cornerPicks: { 'upper:1': { wall: 0, opt: 1 } } });
+  const d = deriveRoom(s.room);
+  const diag = computeLayouts(s, d).upper.runs.flatMap((r) => r.boxes.filter((b) => b.kind === 'diag'));
+  assert.equal(diag.length, 1);
+  assert.equal(diag[0].label, 'WDC24');
+});
+
+test('the smallest box the fill uses is 12 inches', () => {
+  const tiny = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 12)] });
+  assert.deepEqual(run(tiny).runs[0].boxes.map((b) => b.label), ['B12']);
+  // 51" between a window and a corner can now be filled with real boxes rather than slack.
+  const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156)] });
+  s.room.openings.push(win(0, 0.5, 30));
+  for (const r of run(s).runs[0].boxes) assert.ok(r.kind !== 'base' || r.size >= 12);
+});
+
+test('a waste marker becomes a box at least as wide as the marker; a microwave never steers the fill', () => {
+  const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 120)] });
+  s.markers.push({ id: 60, type: 'waste', x: 40, y: 12, w: 18 });
+  const lay = run(s);
+  const w = lay.runs[0].boxes.find((b) => b.type === 'waste');
+  assert.ok(w && w.size >= 18);
+  assert.match(w.label, /^TB\d+/);
+  const before = run(kitchen({ runs: [wallRun(1, 'lower', 0, 0, 120)] })).runs[0].boxes.map((b) => b.label).join();
+  const m = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 120)] });
+  m.markers.push({ id: 61, type: 'microwave', x: 40, y: 12, w: 30 });
+  assert.equal(run(m).runs[0].boxes.map((b) => b.label).join(), before);
+  assert.ok(!run(m).notes.some((n) => n.markerId === 61));
+});
+
+test('tapping a corner cycles blind 36, diagonal 36, then the other blind corners; the corner can move to the other wall', () => {
   const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156), wallRun(2, 'lower', 1, 0, 120)] });
   const first = run(s).runs[0];
   const c = first.boxes.find((b) => b.kind === 'corner');
   near(c.size, 36);
-  s.cornerPicks = { [c.corner.key]: { wall: 0, opt: 1 } };
+  assert.equal(c.corner.count, 4);
+  s.cornerPicks = { [c.corner.key]: { wall: 0, opt: 2 } };
   near(run(s).runs[0].boxes.find((b) => b.kind === 'corner').size, 39);
   s.cornerPicks = { [c.corner.key]: { wall: 1, opt: 0 } };
   const lay = run(s);

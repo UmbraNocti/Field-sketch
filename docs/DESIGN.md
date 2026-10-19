@@ -43,11 +43,11 @@ All the numbers live in `src/rules.js`, marked CONFIRMED or PLACEHOLDER. Changin
 5. Fewest boxes.
 6. Tie-break: stay near where the markers were dropped.
 
-**Standard sizes** are 15" to 42" in 3" steps. Because fewest-boxes is the last rule and 42 is a last resort, 39" and 42" boxes are only used if `preferredMax` is raised. A sink or cooktop box stays at 36" or under unless nothing smaller makes the stretch work.
+**Standard sizes** are 12" to 42" in 3" steps (12" is the minimum default box). Because fewest-boxes is the last rule and 42 is a last resort, 39" and 42" boxes are only used if `preferredMax` is raised. A sink or cooktop box stays at 36" or under unless nothing smaller makes the stretch work.
 
 **Blockers.** Doors are always kept clear. Windows are kept clear by lowers only if the sill is under 36" (a window with no sill height entered is assumed high, with a note). Uppers keep clear of every window. Clearance is 1" from the casing (casing-to-casing), plus the larger of crown or light rail for uppers. A run that crosses a blocker is filled as separate stretches.
 
-**Corners.** Where two runs meet at a square inside corner, one run (the one drawn first) gets a blind corner cabinet; the other starts one cabinet depth (24" lowers, 12" uppers) in. Tap the corner cabinet to cycle its size; the panel can move it to the other wall. Angled corners get no special treatment.
+**Corners.** Where two runs meet at a square inside corner, one run (the one drawn first) owns the corner cabinet. Tapping it cycles **blind 36 → diagonal 36 → blind 39 → blind 42** (uppers: blind 24 → diagonal 24 → blind 27 → blind 30). A *blind* cabinet is centered on the other run's face line: it sits `depth − width/2` from the corner (6" for a 36 base) and a filler closes the gap. A *diagonal* corner has a leg along each wall (36" base, 24" upper) with a 45° front; both runs start one leg in. Other diagonal sizes are left to the designer. The panel can move a blind corner to the other wall. Angled outside corners get no special treatment.
 
 **Markers in lowers.**
 - Dishwasher and range are fixed-width voids (drawn with an X). Fridge and oven are fixed-width full-height cabinets with the same position in the uppers. Sink and cooktop are boxes at least as wide as the marker. A pantry marker makes the box under it full height (also in the uppers).
@@ -213,3 +213,16 @@ There is no settings page. Anything not set per drawing is a fixed default in th
 - Exact crown and light rail values (user will measure).
 - Full set of clearance rules (island 36" and others).
 - Upper cabinet widths and heights (assumed to follow the same width steps for now).
+
+
+## Kitchen rules checklist (Rules tab)
+
+`src/checks.js` runs 26 kitchen rules (numbers in `RULES.checks`) against the sketch. Each comes back as **needs attention** (the sketch breaks it), **check these** (can't be verified from a sketch, or needs the designer's decision) or **looks good**; rules that need more of the sketch drawn show as "not yet". A banner on Lowers/Uppers and a red count on the Rules tab keep warnings visible, and the PDF gets a checklist page.
+
+Checked from geometry: doorway width (rough opening − 2"), walkway and work aisle widths (ray casts between cabinet fronts; 42" one cook, 48" more, set with the Cooks chip on Lowers), work triangle (front of sink base, range or cooktop, fridge; ghosted dashed on Lowers/Rules; ≤ 26 ft, legs 4–9 ft), door swings against cabinets and each other, main traffic through the triangle, wall/base cabinet frontage by room area (150 sq ft split), 60" of uppers within 72" of the sink, waste receptacle present, clear floor 30"×48" at sink, dishwasher, cooking, oven and fridge, 21" beside the dishwasher at right angles, dishwasher within 36" of the sink, sink between or across from cooking and fridge, windows over cooking surfaces, microwave cabinet ≥ 27", counter beside the sink (24"/18"), fridge (15" one side, flag if not both), range/cooktop/oven (15"), and 36" of continuous prep counter beside the sink.
+
+Reminders only: seating clearance, drawer/roll-out frontage, five standing-height storage items, a functional corner unit, knee space, cooking clearance, ventilation CFM, microwave height and landing space, latch side of the fridge.
+
+"Counter" means any lower cabinet that doesn't rise into the uppers (base, corner, diagonal, filler, sink/cooktop/waste base, dishwasher) and not tall cabinets, ranges or gaps. A sink in a sink base leaves `(base − sink)/2` of counter each side.
+
+**Waste** and **Microwave** markers: waste sits in a base cabinet (default 18"); a microwave can be placed on either layer, doesn't steer the layout, and only requires its cabinet to be 27" or more.

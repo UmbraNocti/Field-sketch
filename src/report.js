@@ -6,6 +6,7 @@ import { wallFrames } from './recognize.js';
 import { closestOnSegment } from './geometry.js';
 import { APPLIANCE_TYPES, APPLIANCE_NAMES } from './rules.js';
 import { orderSummary } from './layout.js';
+import { runChecks } from './checks.js';
 
 const fmt = (v) => formatInches(v);
 const val = (v) => (v == null ? '?' : fmt(v));
@@ -84,7 +85,12 @@ export function buildReport(state, derived, layouts, now = new Date()) {
     .filter((m) => APPLIANCE_TYPES.includes(m.type))
     .map((m) => ({ name: `${APPLIANCE_NAMES[m.type]}${m.w ? ` ${fmt(m.w)}` : ''}`, where: whereIs(m, frames) }));
   const up = state.upper || {};
+  const checks = runChecks(state, derived, layouts);
+  const rules = checks.items.filter((i) => i.status !== 'na').map((i) => ({ id: i.id, title: i.title, status: i.status, detail: i.detail }));
   return {
+    rules,
+    rulesSummary: checks.summary,
+
     title: state.name || 'Kitchen sketch',
     date: now.toISOString().slice(0, 10),
     ceiling: state.ceiling != null ? fmt(state.ceiling) : null,

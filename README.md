@@ -10,6 +10,7 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full design and rules.
 |---|---|
 | Walls | Built: finger-drawn walls, dimension panel + keypad, doors, windows, open (construction) walls |
 | Markings | Built: plumbing, outlet, gas, HVAC vent, column |
+| Rules | 26-point kitchen checklist with reminders; work triangle ghosted on Lowers |
 | Lowers | First pass: drag-to-fill cabinet runs, appliance markers, blind corners, islands, notes |
 | Uppers | First pass: same, over a faint copy of the lowers, with crown and light rail clearance |
 
@@ -33,7 +34,9 @@ It's a static web app with no build step and no accounts. Everything is saved in
 
 **Save and Open:** the top bar's Save writes the sketch to a text file (`name-date.fieldsketch.json`) and Open reads one back. The sketch also autosaves in the browser. Tap the name under the title to rename the sketch.
 
-**Lowers tab:** pick the Cabinets pencil and drag along a wall; the boxes fill in using the rules in `src/rules.js` (see the design notes). Swipe around an inside corner to make a run on each wall. Drop appliance markers (sink, cooktop, range, fridge, oven, dishwasher, pantry) to steer the layout; each asks how wide. Tap a blind corner cabinet to cycle its size. Tap a box to select its run and delete it. Drag in open floor for an island; the red band shows where islands can't go. The panel lists each run's boxes in order, notes like "no dishwasher marked", and an order summary.
+**Lowers tab:** pick the Cabinets pencil and drag along a wall; the boxes fill in using the rules in `src/rules.js` (see the design notes). Swipe around an inside corner to make a run on each wall. Drop appliance markers (sink, cooktop, range, fridge, oven, dishwasher, pantry) to steer the layout; each asks how wide. Tap a corner cabinet to cycle blind 36 → diagonal 36 → other blind sizes. Waste and microwave markers are in the tray; the Cooks chip (bottom left) sets work-aisle width for the checks. Tap a box to select its run and delete it. Drag in open floor for an island; the red band shows where islands can't go. The panel lists each run's boxes in order, notes like "no dishwasher marked", and an order summary.
+
+**Rules tab:** the kitchen rules, checked against the sketch and grouped into needs attention / check these / looks good (the same list is on a page of the PDF). The dashed blue triangle on Lowers is the work triangle.
 
 **Uppers tab:** same drag-along-a-wall, over a faint copy of the lowers, with a blank place for the hood over a range or cooktop. Set upper height, crown and light rail in the bottom-left corner; crown and light rail leave extra room next to windows and doors.
 

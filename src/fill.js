@@ -324,13 +324,19 @@ export function fillSegment(opts) {
   const boxes = [];
   let loU = 0;
   let hiU = N;
+  // A blind corner sits `offset` in from the corner (centered on the other run's face), with a
+  // filler strip closing the space to the wall.
   if (startBlind) {
-    loU = Math.min(N, toU(startBlind.width));
-    boxes.push({ u0: 0, u1: toIn(loU), kind: 'corner', side: 'start', ...(startBlind.extra || {}) });
+    const off = toU(startBlind.offset || 0);
+    loU = Math.min(N, off + toU(startBlind.width));
+    if (off > 0) boxes.push({ u0: 0, u1: toIn(off), kind: 'filler', cornerFiller: true });
+    boxes.push({ u0: toIn(off), u1: toIn(loU), kind: 'corner', side: 'start', ...(startBlind.extra || {}) });
   }
   if (endBlind) {
-    hiU = Math.max(loU, N - toU(endBlind.width));
-    boxes.push({ u0: toIn(hiU), u1: len, kind: 'corner', side: 'end', ...(endBlind.extra || {}) });
+    const off = toU(endBlind.offset || 0);
+    hiU = Math.max(loU, N - off - toU(endBlind.width));
+    boxes.push({ u0: toIn(hiU), u1: toIn(N - off), kind: 'corner', side: 'end', ...(endBlind.extra || {}) });
+    if (off > 0) boxes.push({ u0: toIn(N - off), u1: len, kind: 'filler', cornerFiller: true });
   }
   const M = hiU - loU;
   const tab = makeGapTable(sizes, Math.max(len, 1), maxFiller, preferredMax);

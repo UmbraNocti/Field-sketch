@@ -193,6 +193,31 @@ export function buildSketchPdf(report, plans) {
     runsSection(f, report.upper, 'Upper');
   }
 
+  if (report.rules && report.rules.length) {
+    const sub = 'Kitchen rules checklist';
+    const p = newPage(doc, report, sub);
+    const f = new Flow(doc, report, sub, p, [
+      { x: MARGIN, w: 350 },
+      { x: MARGIN + 370, w: 350 },
+    ]);
+    const sm = report.rulesSummary;
+    f.paragraph(`${sm.warn} need attention  -  ${sm.remind} to check  -  ${sm.ok} look good`, { size: 10, bold: true, gap: 6 });
+    const groups = [
+      ['Needs attention', 'warn', WARN],
+      ['Check these', 'remind', INK],
+      ['Looks good', 'ok', MUTED],
+    ];
+    for (const [title, status, color] of groups) {
+      const list = report.rules.filter((r) => r.status === status);
+      if (!list.length) continue;
+      f.section(title);
+      for (const r of list) {
+        f.paragraph(`${r.id}  ${r.title}`, { size: 9, bold: true, color, gap: 0 });
+        f.paragraph(r.detail, { size: 8.5, color: status === 'ok' ? MUTED : INK, gap: 5 });
+      }
+    }
+  }
+
   doc.pages.forEach((pg, i) => {
     const label = `Page ${i + 1} of ${doc.pages.length}`;
     pg.text(PAGE_W - MARGIN - textWidth(label, 8), PAGE_H - 22, label, { size: 8, color: MUTED });

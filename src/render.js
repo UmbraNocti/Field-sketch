@@ -16,6 +16,8 @@ export const MARKER_NAMES = {
   oven: 'Oven',
   dishwasher: 'Dishwasher',
   pantry: 'Pantry',
+  waste: 'Waste',
+  microwave: 'Microwave',
   plumbing: 'Plumbing',
   outlet: 'Outlet 120V',
   outlet220: 'Outlet 220V',
@@ -59,6 +61,10 @@ export function markerSymbol(type) {
       return '<rect class="mk-body mk-dw" x="-12" y="-12" width="24" height="24" rx="2"/><text class="mk-text mk-dwtext" y="1" text-anchor="middle" dominant-baseline="middle">DW</text>';
     case 'pantry':
       return '<rect class="mk-body mk-pantry" x="-8" y="-14" width="16" height="28" rx="2"/><path class="mk-line mk-pantry-line" d="M-8-5H8M-8 4H8"/>';
+    case 'waste':
+      return '<path class="mk-body mk-waste" d="M-8-8H8L6.5 12H-6.5Z"/><path class="mk-line mk-waste-line" d="M-10-8H10M-3-11H3M-3-3V7M3-3V7"/>';
+    case 'microwave':
+      return '<rect class="mk-body mk-micro" x="-14" y="-10" width="28" height="20" rx="2"/><rect class="mk-line mk-micro-line" x="-10" y="-6" width="14" height="12" rx="1"/><circle class="mk-dot mk-micro-line" cx="9" cy="-3" r="1.5"/><circle class="mk-dot mk-micro-line" cx="9" cy="3" r="1.5"/>';
     default:
       return '';
   }
@@ -148,6 +154,11 @@ function drawLayout(layout, S, view, ui, ghost, labels) {
       if (b.panels) {
         if (b.panels.left) out += line(pts[0], pts[3], 'panel-bar');
         if (b.panels.right) out += line(pts[1], pts[2], 'panel-bar');
+      }
+      if (b.kind === 'diag') {
+        const c = { x: pts.reduce((t, p) => t + p.x, 0) / pts.length, y: pts.reduce((t, p) => t + p.y, 0) / pts.length };
+        if ((b.u1 - b.u0) * view.s >= 40) labels.push(label(c.x, c.y, `${b.label} \u21bb`, 'small box', 0));
+        continue;
       }
       const c = { x: (pts[0].x + pts[2].x) / 2, y: (pts[0].y + pts[2].y) / 2 };
       const along = (b.u1 - b.u0) * view.s;
@@ -321,13 +332,27 @@ export function renderScene({ state, derived, view, ui, layouts }) {
   }
 
   // Cabinets (lowers and uppers tabs).
-  if (room && derived && layouts && (ui.tab === 'lowers' || ui.tab === 'uppers')) {
-    if (ui.tab === 'lowers') {
+  if (room && derived && layouts && (ui.tab === 'lowers' || ui.tab === 'uppers' || ui.tab === 'checklist')) {
+    if (ui.tab === 'lowers' || ui.tab === 'checklist') {
       if (!ui.print) for (const z of layouts.lower.zones) out += `<polygon class="zone" points="${polyStr(z, S)}"/>`;
       out += drawLayout(layouts.lower, S, view, ui, false, boxLabels);
     } else {
       out += drawLayout(layouts.lower, S, view, ui, true, boxLabels);
       out += drawLayout(layouts.upper, S, view, ui, false, boxLabels);
+    }
+  }
+
+  // The work triangle, ghosted over the lowers.
+  const tri = ui.checks && ui.checks.triangle;
+  if (tri && !ui.print && (ui.tab === 'lowers' || ui.tab === 'checklist')) {
+    const pts = tri.pts.map(S);
+    out += `<polygon class="triangle${tri.total > RULES.checks.triangleMax ? ' bad' : ''}" points="${pts.map((q) => `${r1(q.x)},${r1(q.y)}`).join(' ')}"/>`;
+    for (let i = 0; i < 3; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % 3];
+      const L = tri.legs[i];
+      const bad = L < RULES.checks.triangleLeg[0] || L > RULES.checks.triangleLeg[1];
+      out += label((a.x + b.x) / 2, (a.y + b.y) / 2, `${Math.round((L / 12) * 10) / 10} ft`, `small${bad ? ' missing' : ''}`);
     }
   }
 
@@ -348,7 +373,8 @@ export function renderScene({ state, derived, view, ui, layouts }) {
     } else if (APPLIANCE_TYPES.includes(m.type)) {
       // Appliances only show where they matter; elsewhere they sit back, or are hidden.
       if (ui.tab === 'walls') continue;
-      const faint = ui.tab !== 'lowers' ? ' faint' : '';
+      const live = ui.tab === 'lowers' || (ui.tab === 'uppers' && m.type === 'microwave');
+      const faint = live ? '' : ' faint';
       const w = m.w || RULES.defaultWidths[m.type];
       out += `<g class="marker${sel}${faint}" transform="translate(${r1(p.x)} ${r1(p.y)})">${markerSymbol(m.type)}${sel ? '<circle class="sel-ring" r="21"/>' : ''}`;
       if (w) out += label(0, 24, fmt(w), 'small');

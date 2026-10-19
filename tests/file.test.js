@@ -28,6 +28,7 @@ function sampleState() {
       { id: 9, layer: 'lower', kind: 'free', a: { x: 20, y: 30 }, b: { x: 90, y: 30 } },
     ],
     cornerPicks: { 'lower:1': { wall: 1, opt: 2 } },
+    kitchen: { cooks: 2 },
     upper: { height: 42, crown: 3, rail: 0 },
   };
 }

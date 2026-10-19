@@ -7,20 +7,69 @@
 // All sizes are inches.
 
 export const RULES = {
+  // Kitchen checklist numbers (the rules list the user supplied). Each is checked where the app
+  // has the information; the rest become reminders. All CONFIRMED unless marked.
+  checks: {
+    doorMinClear: 32, // 1a: doorway width
+    doorClearDeduct: 2, // PLACEHOLDER: clear width is about the rough opening minus this
+    doorMaxDepth: 24, // 1a
+    walkway: 36, // 1b
+    workAisle: { 1: 42, 2: 48 }, // 1c: one cook / more than one
+    triangleMax: 312, // 2: 26 ft total
+    triangleLeg: [48, 108], // 2: no leg under 4 ft or over 9 ft
+    seatClear: 36, // 4
+    seatClearTraffic: 65, // 4
+    areaSplit: 150, // sq ft: under = small kitchen, 150 and over = large
+    wallFrontage: { small: 144, large: 186 }, // 6
+    wallMinHeight: 30, // 6, 7
+    sinkWallFrontage: 60, // 7
+    sinkWallReach: 72, // 7
+    baseFrontage: { small: 156, large: 192 }, // 8
+    drawerFrontage: { small: 120, large: 165 }, // 9
+    storageItems: 5, // 10
+    knee: { high: 27, wide: 30, deep: 19 }, // 13
+    floorSpace: { wide: 30, deep: 48 }, // 14
+    dishwasherSide: 21, // 15
+    dishwasherFromSink: 36, // 16
+    cookClearProtected: 24, // 18
+    cookClearUnprotected: 30, // 18
+    ventCfm: 150, // 19
+    windowAboveCook: 24, // 20
+    windowBehindCook: 3, // 20
+    microwaveCabinetMin: 27, // 21
+    microwaveHeight: [24, 48], // 21
+    sinkCounter: [24, 18], // 22
+    microwaveLanding: [15, 16], // 23
+    fridgeCounter: 15, // 24
+    cookCounter: 15, // 25
+    prepCounter: 36, // 26
+    cookSurface: 36, // height of a range top, for rule 20
+  },
+
   lower: {
     depth: 24, // placeholder: standard base depth
-    sizes: [15, 18, 21, 24, 27, 30, 33, 36, 39, 42], // confirmed: 15 to 42 in 3" steps (12" to be checked)
-    cornerOptions: [36, 39, 42], // PLACEHOLDER: blind corner widths; tap a corner cabinet to cycle
+    sizes: [12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42], // confirmed: 12 is the smallest standard size, up to 42 in 3" steps
+    // Corner options, in the order tapping a corner cycles through them: blind corner 36, the
+    // diagonal 36 (a 36" leg along each wall with a 45 degree front), then the other blind corners.
+    // CONFIRMED: blind 36 and diagonal 36 (36 is the one every line has). PLACEHOLDER: 39, 42.
+    corners: [
+      { type: 'blind', width: 36 },
+      { type: 'diag', leg: 36 },
+      { type: 'blind', width: 39 },
+      { type: 'blind', width: 42 },
+    ],
   },
   upper: {
     depth: 12, // placeholder: standard wall cabinet depth
-    sizes: [15, 18, 21, 24, 27, 30, 33, 36, 39, 42], // placeholder: same steps as lowers
-    cornerOptions: [24, 27, 30], // PLACEHOLDER: blind corner wall cabinet widths
+    sizes: [12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42], // placeholder: same steps as lowers
+    // CONFIRMED: the diagonal upper is 24". PLACEHOLDER: blind upper widths.
+    corners: [
+      { type: 'blind', width: 24 },
+      { type: 'diag', leg: 24 },
+      { type: 'blind', width: 27 },
+      { type: 'blind', width: 30 },
+    ],
   },
-
-  // Widest box the fill uses unless nothing else makes the run work. 42 is the largest size
-  // that exists, but it is a last resort. PLACEHOLDER.
-  preferredMax: 36,
 
   // Widest a sink or cooktop box gets unless nothing smaller makes the stretch work. PLACEHOLDER.
   flexMax: 36,
@@ -34,7 +83,7 @@ export const RULES = {
   dishwasherMaxFromSink: 36, // confirmed: dishwasher within 3 ft of the sink
 
   // Width asked for when an appliance marker is dropped. The user can change it. PLACEHOLDER.
-  defaultWidths: { sink: 24, cooktop: 30, range: 30, fridge: 36, oven: 30, dishwasher: 24 },
+  defaultWidths: { sink: 24, cooktop: 30, range: 30, fridge: 36, oven: 30, dishwasher: 24, waste: 18, microwave: 30 },
 
   // Which utility markers an appliance must be touching. Confirmed: oven and range use 220V or
   // gas; fridge and dishwasher use a standard outlet. Sink and cooktop follow "handles like sink".
@@ -74,7 +123,10 @@ export const RULES = {
 //   tall  = full-height, fixed width, same spot in lowers and uppers (fridge, oven)
 //   flex  = a cabinet box at least as wide as the marker (sink, cooktop)
 //   pantry = no width of its own; any box under it becomes full height
+//   none  = a marker that checks rules but doesn't steer the layout (microwave)
 export const MARKER_KIND = {
+  waste: 'flex',
+  microwave: 'none',
   dishwasher: 'void',
   range: 'void',
   fridge: 'tall',
@@ -84,7 +136,7 @@ export const MARKER_KIND = {
   pantry: 'pantry',
 };
 
-export const APPLIANCE_TYPES = ['sink', 'cooktop', 'range', 'fridge', 'oven', 'dishwasher', 'pantry'];
+export const APPLIANCE_TYPES = ['sink', 'cooktop', 'range', 'fridge', 'oven', 'dishwasher', 'pantry', 'waste', 'microwave'];
 export const UTILITY_TYPES = ['plumbing', 'outlet', 'outlet220', 'gas', 'vent', 'column'];
 
 export const APPLIANCE_NAMES = {
@@ -95,4 +147,6 @@ export const APPLIANCE_NAMES = {
   oven: 'Oven',
   dishwasher: 'Dishwasher',
   pantry: 'Pantry',
+  waste: 'Waste',
+  microwave: 'Microwave',
 };

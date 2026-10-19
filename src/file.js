@@ -21,6 +21,7 @@ export function serializeSketch(state, now = new Date()) {
         runs: state.runs,
         cornerPicks: state.cornerPicks,
         upper: state.upper,
+        kitchen: state.kitchen,
       },
     },
     null,

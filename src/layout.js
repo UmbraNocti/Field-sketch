@@ -62,7 +62,7 @@ function blockersFor(layer, state, derived, wall, molding, notes) {
 }
 
 // Inside corners where two runs meet: one holds the blind corner cabinet, the other stops short.
-function cornerRoles(layer, runs, runFrames, frames, orient, picks) {
+function cornerRoles(layer, runs, runFrames, frames, orient, picks, corners) {
   const roles = new Map();
   const n = frames.length;
   const wallRuns = runs.filter((r) => r.kind === 'wall' && runFrames.get(r.id));
@@ -87,7 +87,20 @@ function cornerRoles(layer, runs, runFrames, frames, orient, picks) {
       const key = `${layer}:${vertex}`;
       const pick = picks[key];
       const holderWall = pick && (pick.wall === run.wall || pick.wall === j) ? pick.wall : run.id < other.id ? run.wall : j;
-      roles.set(`${run.id}:${end}`, { key, holder: holderWall === run.wall, opt: pick ? pick.opt : 0, vertex, walls: [run.wall, j] });
+      const opt = pick ? pick.opt % corners.length : 0;
+      const choice = corners[opt];
+      roles.set(`${run.id}:${end}`, {
+        key,
+        holder: holderWall === run.wall,
+        opt,
+        count: corners.length,
+        type: choice.type,
+        size: choice.type === 'diag' ? choice.leg : choice.width,
+        ownerRunId: Math.min(run.id, other.id),
+        vertex,
+        walls: [run.wall, j],
+        end,
+      });
     }
   }
   return roles;
@@ -117,8 +130,10 @@ function labelFor(layer, box) {
       return `gap ${size}`;
     case 'corner':
       return `${layer === 'upper' ? 'WBC' : 'BBC'}${size}`;
+    case 'diag':
+      return `${layer === 'upper' ? 'WDC' : 'DC'}${size}`;
     case 'flex':
-      return box.type === 'sink' ? `SB${size}` : `CB${size}`;
+      return box.type === 'sink' ? `SB${size}` : box.type === 'waste' ? `TB${size}` : `CB${size}`;
     case 'void':
       return box.type === 'range' ? `RNG ${size}` : `DW ${size}`;
     case 'hood':
@@ -137,6 +152,41 @@ function segDist(a, b, c, d) {
   return Math.min(closestOnSegment(a, c, d).d, closestOnSegment(b, c, d).d, closestOnSegment(c, a, b).d, closestOnSegment(d, a, b).d);
 }
 
+// A diagonal corner cabinet: a leg along each wall and a 45 degree front. It is built from the
+// corner point and the directions running away from it along both walls.
+function diagonalBox(layer, role, frames, orient, fr, depth) {
+  const n = frames.length;
+  const wall = role.walls[0];
+  const other = role.walls[1];
+  const fa = frames[wall];
+  const fb = frames[other];
+  const atStart = role.end === 'start';
+  const C = atStart ? fa.a : fa.b;
+  const dA = atStart ? fa.d : { x: -fa.d.x, y: -fa.d.y };
+  const dB = atStart ? { x: -fb.d.x, y: -fb.d.y } : fb.d;
+  const nA = { x: fa.n.x * orient, y: fa.n.y * orient };
+  const nB = { x: fb.n.x * orient, y: fb.n.y * orient };
+  const leg = role.size;
+  const P = (a, b, c, d) => ({ x: C.x + dA.x * a + nA.x * b + dB.x * c + nB.x * d, y: C.y + dA.y * a + nA.y * b + dB.y * c + nB.y * d });
+  void n;
+  return {
+    kind: 'diag',
+    u0: atStart ? 0 : fr.L - leg,
+    u1: atStart ? leg : fr.L,
+    runId: undefined,
+    depth,
+    corner: { key: role.key, opt: role.opt, count: role.count },
+    cornerWalls: role.walls,
+    poly: [
+      { x: C.x, y: C.y },
+      P(leg, 0, 0, 0),
+      P(leg, depth, 0, 0),
+      P(0, 0, leg, depth),
+      P(0, 0, leg, 0),
+    ],
+  };
+}
+
 export function computeLayout(layer, state, derived, lowerLayout) {
   const empty = { layer, runs: [], zones: [], notes: [], tall: new Map(), markerBoxes: new Map() };
   if (!state.room || !derived) return empty;
@@ -150,7 +200,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
   const out = { layer, runs: [], zones: [], notes, tall: new Map(), markerBoxes: new Map() };
 
   // Uppers care about the full-height pieces, the pantry, and the blank place over a range or cooktop.
-  const appliances = state.markers.filter((m) => APPLIANCE_TYPES.includes(m.type) && (layer === 'lower' || MARKER_KIND[m.type] === 'tall' || m.type === 'pantry' || m.type === 'range' || m.type === 'cooktop'));
+  const appliances = state.markers.filter((m) => APPLIANCE_TYPES.includes(m.type) && MARKER_KIND[m.type] !== 'none' && (layer === 'lower' || MARKER_KIND[m.type] === 'tall' || m.type === 'pantry' || m.type === 'range' || m.type === 'cooktop'));
   const utilities = state.markers.filter((m) => UTILITY_TYPES.includes(m.type));
 
   // Frames for every run, then give each appliance marker to the run it sits against.
@@ -160,7 +210,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
     if (fr) runFrames.set(run.id, fr);
     else notes.push({ level: 'warn', text: 'A cabinet run is on a wall that is now open. Delete it or redraw it.', runId: run.id });
   }
-  const roles = cornerRoles(layer, runs, runFrames, frames, orient, picks);
+  const roles = cornerRoles(layer, runs, runFrames, frames, orient, picks, rules.corners);
   const assigned = new Map();
   const placedMarkers = new Set();
   for (const m of appliances) {
@@ -190,16 +240,29 @@ export function computeLayout(layer, state, derived, lowerLayout) {
     let hi = fr.u1;
     let startBlind = null;
     let endBlind = null;
+    const diagBoxes = [];
     const sr = roles.get(`${run.id}:start`);
     const er = roles.get(`${run.id}:end`);
-    if (sr) {
-      if (sr.holder) startBlind = { width: rules.cornerOptions[sr.opt % rules.cornerOptions.length], role: sr };
-      else lo += depth;
-    }
-    if (er) {
-      if (er.holder) endBlind = { width: rules.cornerOptions[er.opt % rules.cornerOptions.length], role: er };
-      else hi -= depth;
-    }
+    // A blind corner cabinet is centered on the other run's face line, so it sits in from the
+    // corner by (depth - width / 2) with a filler closing the gap. A diagonal corner is a leg
+    // along each wall with a 45 degree front; both runs start a full leg in from the corner.
+    const applyCorner = (role, atStart) => {
+      if (!role) return;
+      if (role.type === 'blind') {
+        if (role.holder) {
+          const blind = { width: role.size, offset: Math.max(0, depth - role.size / 2), role };
+          if (atStart) startBlind = blind;
+          else endBlind = blind;
+        } else if (atStart) lo += depth;
+        else hi -= depth;
+        return;
+      }
+      if (atStart) lo += role.size;
+      else hi -= role.size;
+      if (role.ownerRunId === run.id) diagBoxes.push(diagonalBox(layer, role, frames, orient, fr, depth));
+    };
+    applyCorner(sr, true);
+    applyCorner(er, false);
     const blockers = run.kind === 'wall' ? blockersFor(layer, state, derived, run.wall, molding, notes) : [];
     const segs = segmentsOf(lo, hi, blockers);
     const boxes = [];
@@ -284,8 +347,8 @@ export function computeLayout(layer, state, derived, lowerLayout) {
         flexMax: RULES.flexMax,
         dwMax: RULES.dishwasherMaxFromSink,
         freeShift: RULES.freeShiftWidths,
-        startBlind: sb ? { width: sb.width, extra: { corner: { key: sb.role.key, opt: sb.role.opt, count: rules.cornerOptions.length } } } : null,
-        endBlind: eb ? { width: eb.width, extra: { corner: { key: eb.role.key, opt: eb.role.opt, count: rules.cornerOptions.length } } } : null,
+        startBlind: sb ? { width: sb.width, offset: sb.offset, extra: { corner: { key: sb.role.key, opt: sb.role.opt, count: sb.role.count } } } : null,
+        endBlind: eb ? { width: eb.width, offset: eb.offset, extra: { corner: { key: eb.role.key, opt: eb.role.opt, count: eb.role.count } } } : null,
         items,
       });
       for (const id of res.dropped) {
@@ -342,13 +405,14 @@ export function computeLayout(layer, state, derived, lowerLayout) {
       }
     }
 
+    boxes.push(...diagBoxes);
     boxes.sort((a, b) => a.u0 - b.u0);
     boxes.forEach((b) => {
       b.label = labelFor(layer, b);
       b.size = b.u1 - b.u0;
       // Full-height cabinets are the same 24" deep in both layers.
       b.depth = b.kind === 'tall' ? RULES.lower.depth : depth;
-      b.poly = [at(fr, b.u0), at(fr, b.u1), at(fr, b.u1, b.depth), at(fr, b.u0, b.depth)];
+      if (!b.poly) b.poly = [at(fr, b.u0), at(fr, b.u1), at(fr, b.u1, b.depth), at(fr, b.u0, b.depth)];
       if (b.kind === 'gap') notes.push({ level: 'warn', text: `${fmt(b.size)}" left over in Run ${runIndex + 1}.`, runId: run.id });
       if (b.id != null && (b.kind === 'tall' || b.kind === 'void' || b.kind === 'flex' || b.kind === 'hood')) {
         b.wall = run.kind === 'wall' ? run.wall : null;
@@ -435,6 +499,7 @@ export function computeLayouts(state, derived) {
     state.runs,
     state.cornerPicks,
     state.upper,
+    state.kitchen,
     state.markers,
     state.room && [state.room.start, state.room.dirs, state.room.base, state.room.known, state.room.construction, state.room.openings],
   ]);
@@ -452,7 +517,7 @@ export function orderSummary(layout) {
   const add = (label) => counts.set(label, (counts.get(label) || 0) + 1);
   for (const rl of layout.runs) {
     for (const b of rl.boxes) {
-      const orderable = ['base', 'corner', 'flex', 'filler'].includes(b.kind) || (b.kind === 'tall' && b.type !== 'fridge');
+      const orderable = ['base', 'corner', 'diag', 'flex', 'filler'].includes(b.kind) || (b.kind === 'tall' && b.type !== 'fridge');
       if (orderable) add(b.label);
     }
     for (const e of rl.extras || []) add(e);

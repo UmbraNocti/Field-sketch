@@ -91,7 +91,8 @@ test('the PDF is a real, well-formed document with the lists in it', () => {
   const text = Buffer.from(bytes).toString('latin1');
   assert.ok(text.startsWith('%PDF-1.4'));
   assert.ok(text.trimEnd().endsWith('%%EOF'));
-  assert.equal((text.match(/\/Type \/Page /g) || []).length, 3);
+  assert.equal((text.match(/\/Type \/Page /g) || []).length, 4);
+  assert.ok(text.includes('Kitchen rules checklist'));
   for (const needle of ['Smith kitchen', 'Window 1', '24 1/2\\" from corner W4/W1'.replace('\\"', '"'), 'Door 1', 'Rough opening', 'Casing to casing', 'Swing']) {
     assert.ok(text.includes(needle.replace(/\(/g, '\\(')) || text.includes(needle), needle);
   }
@@ -102,7 +103,7 @@ test('the PDF is a real, well-formed document with the lists in it', () => {
   offsets.forEach((o, i) => assert.ok(text.slice(o).startsWith(`${i + 1} 0 obj`), `object ${i + 1} at ${o}`));
 });
 
-test('lower and upper pages only appear when there is something on them', () => {
+test('lower and upper pages only appear when there is something on them (the rules page always does)', () => {
   const s = sample();
   s.runs = [];
   s.markers = [];
@@ -110,7 +111,7 @@ test('lower and upper pages only appear when there is something on them', () => 
   const report = buildReport(s, d, computeLayouts(s, d));
   const img = { jpeg: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), w: 10, h: 10 };
   const bytes = buildSketchPdf(report, { room: img, lower: null, upper: null });
-  assert.equal((Buffer.from(bytes).toString('latin1').match(/\/Type \/Page /g) || []).length, 1);
+  assert.equal((Buffer.from(bytes).toString('latin1').match(/\/Type \/Page /g) || []).length, 2);
 });
 
 test('a long list spills onto a continuation page instead of running off the sheet', () => {
@@ -120,7 +121,7 @@ test('a long list spills onto a continuation page instead of running off the she
   const report = buildReport(s, d, computeLayouts(s, d));
   const img = { jpeg: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), w: 10, h: 10 };
   const text = Buffer.from(buildSketchPdf(report, { room: img, lower: img, upper: img })).toString('latin1');
-  assert.ok((text.match(/\/Type \/Page /g) || []).length > 3);
+  assert.ok((text.match(/\/Type \/Page /g) || []).length > 4);
   assert.ok(text.includes('\\(continued\\)'));
 });
 

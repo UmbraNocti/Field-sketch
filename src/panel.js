@@ -155,6 +155,34 @@ function cabinetPanel(state, ui, layouts) {
     ${summary ? `<h3>Order summary</h3><p class="summary">${summary}</p>` : ''}`;
 }
 
+const rulesBannerHtml = (ui) => {
+  const c = ui.checks;
+  if (!c || c.empty) return '';
+  const { warn, remind } = c.summary;
+  if (!warn && !remind) return '';
+  const cls = warn ? ' bad' : '';
+  const text = warn ? `${warn} rule${warn === 1 ? '' : 's'} need attention${remind ? ` · ${remind} to check` : ''}` : `${remind} rule${remind === 1 ? '' : 's'} to check`;
+  return `<button class="rules-banner${cls}" data-act="goto-rules">${esc(text)} ▸</button>`;
+};
+
+function checklistPanel(state, ui) {
+  const c = ui.checks;
+  if (!state.room) return `<div class="empty"><p><strong>Draw the room first.</strong></p><p>The kitchen rules are checked against the sketch.</p></div>`;
+  if (!c || c.empty) return `<div class="empty"><p><strong>Make the walls close up</strong> to check the kitchen rules.</p></div>`;
+  const row = (it) => `<div class="rule ${it.status}"><b><span class="n">${esc(it.id)}</span>${esc(it.title)}</b><small>${esc(it.detail)}</small></div>`;
+  const group = (title, status) => {
+    const list = c.items.filter((i) => i.status === status);
+    return list.length ? `<h3>${title}</h3>${list.map(row).join('')}` : '';
+  };
+  const { warn, remind, ok } = c.summary;
+  const cooks = (state.kitchen && state.kitchen.cooks) || 1;
+  const na = c.items.filter((i) => i.status === 'na');
+  return `<div class="rules-summary"><span class="w">${warn} need attention</span><span class="r">${remind} to check</span><span class="g">${ok} good</span></div>
+    <p class="muted">Cooks: ${cooks === 2 ? 'more than one' : 'one'} (change it on the Lowers tab). Reminders are things a sketch can’t prove.</p>
+    ${group('Needs attention', 'warn')}${group('Check these', 'remind')}${group('Looks good', 'ok')}
+    ${na.length ? `<h3>Not yet</h3><p class="muted">${na.map((i) => esc(i.id)).join(', ')} need more of the sketch filled in.</p>` : ''}`;
+}
+
 export function panelMarkup(state, derived, ui, layouts) {
   let body;
   let title;
@@ -164,9 +192,12 @@ export function panelMarkup(state, derived, ui, layouts) {
   } else if (ui.tab === 'markings') {
     title = 'Markings';
     body = markingsPanel(state, ui);
+  } else if (ui.tab === 'checklist') {
+    title = 'Kitchen rules';
+    body = checklistPanel(state, ui);
   } else {
     title = ui.tab === 'lowers' ? 'Lowers' : 'Uppers';
-    body = cabinetPanel(state, ui, layouts);
+    body = rulesBannerHtml(ui) + cabinetPanel(state, ui, layouts);
   }
   return `<div class="panel-head"><h2>${title}</h2></div>
     <div class="panel-scroll">${body}</div>

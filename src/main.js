@@ -23,6 +23,7 @@ import {
 import { renderScene, markerIcon } from './render.js';
 import { computeLayouts, wallBlockers } from './layout.js';
 import { computeFit } from './viewfit.js';
+import { runChecks } from './checks.js';
 import { RULES, APPLIANCE_TYPES, APPLIANCE_NAMES, UTILITY_TYPES } from './rules.js';
 import { serializeSketch, parseSketch, fileNameFor } from './file.js';
 import { buildReport } from './report.js';
@@ -67,6 +68,7 @@ const TABS = [
   { id: 'markings', label: 'Markings' },
   { id: 'lowers', label: 'Lowers' },
   { id: 'uppers', label: 'Uppers' },
+  { id: 'checklist', label: 'Rules' },
 ];
 
 const PENCILS = [
@@ -140,12 +142,20 @@ function trayMarkup() {
     ).join('');
   }
   const pencil = `<button class="pencil${ui.cabTool === 'cabinets' ? ' active' : ''}" data-cab="cabinets">${pencilSvg('#8a5a2b')}<span>Cabinets</span></button>`;
-  if (ui.tab === 'uppers') return pencil;
+  const moveTile = `<button class="tool-tile${ui.cabTool === 'select' ? ' active' : ''}" data-cab="select"><svg viewBox="-16 -16 32 32" width="30" height="30" aria-hidden="true"><path class="mk-line" stroke="currentColor" d="M0-11V11M-11 0H11M0-11l-4 4M0-11l4 4M0 11l-4-4M0 11l4-4M-11 0l4-4M-11 0l4 4M11 0l-4-4M11 0l-4 4"/></svg><span>Move</span></button>`;
+  if (ui.tab === 'uppers') {
+    return pencil + `<button class="tool-tile${ui.cabTool === 'microwave' ? ' active' : ''}" data-cab="microwave">${markerIcon('microwave')}<span>Microwave</span></button>` + moveTile;
+  }
   const tiles = APPLIANCE_TYPES.map(
     (t) => `<button class="tool-tile${ui.cabTool === t ? ' active' : ''}" data-cab="${t}">${markerIcon(t)}<span>${APPLIANCE_NAMES[t]}</span></button>`,
   ).join('');
   const move = `<button class="tool-tile${ui.cabTool === 'select' ? ' active' : ''}" data-cab="select"><svg viewBox="-16 -16 32 32" width="30" height="30" aria-hidden="true"><path class="mk-line" stroke="currentColor" d="M0-11V11M-11 0H11M0-11l-4 4M0-11l4 4M0 11l-4-4M0 11l4-4M-11 0l4-4M-11 0l4 4M11 0l-4-4M11 0l-4 4"/></svg><span>Move</span></button>`;
   return pencil + tiles + move;
+}
+
+function cooksMarkup(state) {
+  const n = (state.kitchen && state.kitchen.cooks) || 1;
+  return `<button data-act="cooks"><small>Cooks</small><b>${n === 2 ? 'More than one' : 'One'}</b></button>`;
 }
 
 function cornerMarkup(state) {
@@ -163,6 +173,7 @@ function render() {
   const derived = deriveRoom(state.room);
   const layouts = computeLayouts(state, derived);
   ui.layouts = layouts;
+  ui.checks = runChecks(state, derived, layouts);
   scene.innerHTML = renderScene({ state, derived, view, ui, layouts });
   emptyEl.hidden = !!state.room || ui.tab !== 'walls';
   stageEl.classList.toggle('kp-open', !!ui.active);
@@ -182,7 +193,7 @@ function render() {
   }
 
   tabsEl.innerHTML = TABS.map(
-    (t) => `<button class="tab${ui.tab === t.id ? ' active' : ''}${t.soon ? ' soon' : ''}" data-tab="${t.id}">${t.label}</button>`,
+    (t) => `<button class="tab${ui.tab === t.id ? ' active' : ''}${t.soon ? ' soon' : ''}" data-tab="${t.id}">${t.label}${t.id === 'checklist' && ui.checks && ui.checks.summary.warn ? `<i class="badge">${ui.checks.summary.warn}</i>` : ''}</button>`,
   ).join('');
 
   const showTray = ui.tab === 'walls' || ui.tab === 'lowers' || ui.tab === 'uppers';
@@ -190,8 +201,8 @@ function render() {
   trayEl.classList.toggle('scroll', ui.tab === 'lowers');
   if (showTray) trayEl.innerHTML = trayMarkup();
 
-  cornerEl.hidden = ui.tab !== 'uppers';
-  if (ui.tab === 'uppers') cornerEl.innerHTML = cornerMarkup(state);
+  cornerEl.hidden = ui.tab !== 'uppers' && ui.tab !== 'lowers';
+  if (!cornerEl.hidden) cornerEl.innerHTML = ui.tab === 'uppers' ? cornerMarkup(state) : cooksMarkup(state);
 
   let hint = '';
   if (ui.tab === 'walls') {
@@ -200,6 +211,8 @@ function render() {
     else hint = PENCILS.find((p) => p.id === ui.tool).hint;
   } else if (ui.tab === 'markings') {
     hint = ui.markerTool === 'select' ? 'Drag a marker to move it. Tap one to select it.' : 'Tap the sketch to place a marker. Drag a placed one to move it.';
+  } else if (ui.tab === 'checklist') {
+    hint = 'The kitchen rules, checked against your sketch. The dashed triangle is the work triangle.';
   } else if (ui.cabTool === 'cabinets') {
     hint =
       ui.tab === 'lowers'
@@ -442,7 +455,7 @@ function finishWallsStroke(pts) {
 
 function markerAt(p) {
   const state = store.get();
-  const editable = ui.tab === 'lowers' ? APPLIANCE_TYPES : UTILITY_TYPES;
+  const editable = ui.tab === 'lowers' ? APPLIANCE_TYPES : ui.tab === 'uppers' ? ['microwave'] : UTILITY_TYPES;
   for (let i = state.markers.length - 1; i >= 0; i--) {
     const m = state.markers[i];
     if (!editable.includes(m.type)) continue;
@@ -507,12 +520,15 @@ function cycleCorner(rl, b) {
   const layer = layerOfTab();
   const c = b.corner;
   const next = (c.opt + 1) % c.count;
+  const prev = store.get().cornerPicks[c.key];
   store.mutate((s) => {
-    s.cornerPicks[c.key] = { wall: rl.run.wall, opt: next };
+    s.cornerPicks[c.key] = { wall: prev ? prev.wall : rl.run.wall, opt: next };
   });
   ui.selectedRun = rl.run.id;
   render();
-  toast(`Blind corner ${formatInches(RULES[layer].cornerOptions[next])} (${next + 1} of ${c.count}). Tap again for the next size.`);
+  const o = RULES[layer].corners[next];
+  const what = o.type === 'diag' ? `Diagonal corner, ${formatInches(o.leg)} each way` : `Blind corner ${formatInches(o.width)}`;
+  toast(`${what} (${next + 1} of ${c.count}). Tap again for the next one.`);
 }
 
 function handleCabTap(p) {
@@ -523,7 +539,7 @@ function handleCabTap(p) {
     for (const rl of lay.runs) {
       for (const b of rl.boxes) {
         if (inPoly(w, b.poly)) {
-          if (b.kind === 'corner') return cycleCorner(rl, b);
+          if (b.kind === 'corner' || b.kind === 'diag') return cycleCorner(rl, b);
           ui.selectedRun = rl.run.id;
           ui.selectedMarker = null;
           return render();
@@ -670,7 +686,7 @@ function finishCabStroke(pts) {
   const layer = layerOfTab();
   const cls = classifyStroke(pts);
   const p = pts[pts.length - 1];
-  const markerTool = layer === 'lower' && APPLIANCE_TYPES.includes(ui.cabTool);
+  const markerTool = layer === 'lower' ? APPLIANCE_TYPES.includes(ui.cabTool) : ui.cabTool === 'microwave';
   if (markerTool) {
     if (Math.hypot(p.x - pts[0].x, p.y - pts[0].y) < 40) placeMarker(p, ui.cabTool);
     return;
@@ -735,7 +751,7 @@ svg.addEventListener('pointerdown', (e) => {
     return;
   }
   if (pointers.size > 2) return;
-  if (ui.tab === 'markings' || ui.tab === 'lowers') {
+  if (ui.tab === 'markings' || ui.tab === 'lowers' || ui.tab === 'uppers') {
     const m = markerAt(p);
     if (m) {
       const w = toWorld(p);
@@ -834,6 +850,7 @@ tabsEl.addEventListener('click', (e) => {
   if (!b) return;
   applyEntry();
   ui.tab = b.dataset.tab;
+  if (ui.tab === 'uppers' && ui.cabTool !== 'microwave' && ui.cabTool !== 'select') ui.cabTool = 'cabinets';
   ui.pending = null;
   setActive(null);
   ui.selectedMarker = null;
@@ -856,6 +873,12 @@ trayEl.addEventListener('click', (e) => {
 });
 
 cornerEl.addEventListener('click', (e) => {
+  if (e.target.closest('[data-act="cooks"]')) {
+    store.mutate((s) => {
+      s.kitchen = { cooks: s.kitchen && s.kitchen.cooks === 2 ? 1 : 2 };
+    });
+    return;
+  }
   const b = e.target.closest('[data-field]');
   if (!b) return;
   openField({ kind: 'upper', field: b.dataset.field }, []);
@@ -938,6 +961,10 @@ panelEl.addEventListener('click', (e) => {
       store.mutate((s) => {
         s.cornerPicks[d.key] = { wall: Number(d.wall), opt: Number(d.opt) };
       });
+      break;
+    case 'goto-rules':
+      ui.tab = 'checklist';
+      render();
       break;
     case 'edit-width':
       setActive({ kind: 'marker', id: Number(d.id), field: 'w' }, []);
