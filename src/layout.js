@@ -6,6 +6,16 @@ import { RULES, PANTRY_SIZES, MARKER_KIND, APPLIANCE_TYPES, UTILITY_TYPES, APPLI
 import { fillSegment } from './fill.js';
 import { wallFrames } from './recognize.js';
 import { dist, closestOnSegment, segIntersect } from './geometry.js';
+
+function inPoly(p, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
 import { formatInches } from './format.js';
 
 const fmt = (v) => formatInches(v, { quote: false });
@@ -131,7 +141,7 @@ function labelFor(layer, box) {
     case 'corner':
       return `${layer === 'upper' ? 'WBC' : 'BBC'}${size}`;
     case 'diag':
-      return `${layer === 'upper' ? 'WDC' : 'DC'}${size}`;
+      return `${layer === 'upper' ? 'WDC' : box.type === 'sink' ? 'DSB' : box.type === 'cooktop' ? 'DCB' : 'DC'}${size}`;
     case 'flex':
       return box.type === 'sink' ? `SB${size}` : box.type === 'waste' ? `TB${size}` : `CB${size}`;
     case 'void':
@@ -172,6 +182,12 @@ function diagonalBox(layer, role, frames, orient, fr, depth) {
   void n;
   return {
     kind: 'diag',
+    normal: (() => {
+      const x = dA.x + dB.x;
+      const y = dA.y + dB.y;
+      const l = Math.hypot(x, y) || 1;
+      return { x: x / l, y: y / l };
+    })(),
     u0: atStart ? 0 : fr.L - leg,
     u1: atStart ? leg : fr.L,
     runId: undefined,
@@ -214,7 +230,28 @@ export function computeLayout(layer, state, derived, lowerLayout) {
   const roles = cornerRoles(layer, runs, runFrames, frames, orient, picks, rules.corners);
   const assigned = new Map();
   const placedMarkers = new Set();
+  // A diagonal corner cabinet can hold a sink or a cooktop of 24" or less; that marker belongs to
+  // the corner instead of steering a run.
+  const diagHolds = new Map();
+  if (layer === 'lower') {
+    for (const [key, role] of roles) {
+      if (role.type !== 'diag' || role.ownerRunId == null || !key.startsWith(`${role.ownerRunId}:`)) continue;
+      const ofr = runFrames.get(role.ownerRunId);
+      if (!ofr) continue;
+      const poly = diagonalBox(layer, role, frames, orient, ofr, rules.depth).poly;
+      const cx = poly.reduce((t, q) => t + q.x, 0) / poly.length;
+      const cy = poly.reduce((t, q) => t + q.y, 0) / poly.length;
+      const m = appliances.find(
+        (a) => (a.type === 'sink' || a.type === 'cooktop') && (a.w || RULES.defaultWidths[a.type]) <= RULES.diagonalAppliance && !placedMarkers.has(a.id) && (inPoly(a, poly) || dist(a, { x: cx, y: cy }) <= 12),
+      );
+      if (m) {
+        diagHolds.set(role.key, m);
+        placedMarkers.add(m.id);
+      }
+    }
+  }
   for (const m of appliances) {
+    if (placedMarkers.has(m.id)) continue;
     let best = null;
     for (const run of runs) {
       const fr = runFrames.get(run.id);
@@ -260,7 +297,16 @@ export function computeLayout(layer, state, derived, lowerLayout) {
       }
       if (atStart) lo += role.size;
       else hi -= role.size;
-      if (role.ownerRunId === run.id) diagBoxes.push(diagonalBox(layer, role, frames, orient, fr, depth));
+      if (role.ownerRunId === run.id) {
+        const db = diagonalBox(layer, role, frames, orient, fr, depth);
+        const held = diagHolds.get(role.key);
+        if (held) {
+          db.type = held.type;
+          db.id = held.id;
+          db.wall = null;
+        }
+        diagBoxes.push(db);
+      }
     };
     applyCorner(sr, true);
     applyCorner(er, false);
@@ -396,7 +442,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
       b.depth = b.kind === 'tall' ? RULES.lower.depth : depth;
       if (!b.poly) b.poly = [at(fr, b.u0), at(fr, b.u1), at(fr, b.u1, b.depth), at(fr, b.u0, b.depth)];
       if (b.kind === 'gap') notes.push({ level: 'warn', text: `${fmt(b.size)}" left over in Run ${runIndex + 1}.`, runId: run.id });
-      if (b.id != null && (b.kind === 'tall' || b.kind === 'void' || b.kind === 'flex' || b.kind === 'hood')) {
+      if (b.id != null && (b.kind === 'diag' || b.kind === 'tall' || b.kind === 'void' || b.kind === 'flex' || b.kind === 'hood')) {
         b.wall = run.kind === 'wall' ? run.wall : null;
         out.markerBoxes.set(b.id, b);
         if (b.kind === 'tall') out.tall.set(b.id, { wall: run.kind === 'wall' ? run.wall : null, u0: b.u0, u1: b.u1 });

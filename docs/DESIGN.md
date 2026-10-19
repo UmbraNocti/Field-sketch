@@ -226,3 +226,5 @@ Reminders only: seating clearance, drawer/roll-out frontage, five standing-heigh
 "Counter" means any lower cabinet that doesn't rise into the uppers (base, corner, diagonal, filler, sink/cooktop/waste base, dishwasher) and not tall cabinets, ranges or gaps. A sink in a sink base leaves `(base − sink)/2` of counter each side.
 
 **Waste** and **Microwave** markers: waste sits in a base cabinet (default 18"); a microwave can be placed on either layer, doesn't steer the layout, and only requires its cabinet to be 27" or more.
+
+A lower **diagonal corner** can hold a sink or cooktop of 24" or less: drop the marker on the diagonal and the corner becomes `DSB36` (sink) or `DCB36` (cooktop) instead of steering a run. Wider ones, and other appliances, still go in the runs.

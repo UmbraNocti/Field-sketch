@@ -388,3 +388,23 @@ test('labels name the pieces for the order list', () => {
   assert.ok(labels.some((l) => /^B\d+/.test(l)));
   assert.ok(upper.runs[0].boxes.every((b) => /^W\d+/.test(b.label) || b.kind !== 'base'));
 });
+
+test('a diagonal corner can hold a sink or cooktop of 24 inches or less', () => {
+  const base = () => kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156), wallRun(2, 'lower', 1, 0, 120)], cornerPicks: { 'lower:1': { wall: 0, opt: 1 } } });
+  const find = (s) => run(s).runs.flatMap((r) => r.boxes).find((b) => b.kind === 'diag');
+  assert.equal(find(base()).label, 'DC36');
+  for (const [type, w, label] of [['sink', 24, 'DSB36'], ['cooktop', 24, 'DCB36']]) {
+    const s = base();
+    s.markers.push({ id: 70, type, x: 146, y: 10, w });
+    const d = find(s);
+    assert.equal(d.label, label);
+    assert.equal(d.id, 70);
+    assert.equal(run(s).markerBoxes.get(70), d);
+  }
+  const wide = base();
+  wide.markers.push({ id: 71, type: 'sink', x: 146, y: 10, w: 30 });
+  assert.equal(find(wide).label, 'DC36');
+  const fridge = base();
+  fridge.markers.push({ id: 72, type: 'fridge', x: 146, y: 10, w: 24 });
+  assert.equal(find(fridge).label, 'DC36');
+});

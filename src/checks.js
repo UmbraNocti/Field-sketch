@@ -317,13 +317,14 @@ export function runChecks(state, derived, layouts) {
   else {
     const tight = [];
     for (const [name, it] of floorFor) {
-      const fr = it.rl.frame;
+      const nrm = it.box.normal || it.rl.frame.n;
+      const alg = { x: -nrm.y, y: nrm.x };
       const fc = front(it);
       let min = Infinity;
       for (let off = -C.floorSpace.wide / 2; off <= C.floorSpace.wide / 2 + EPS; off += C.floorSpace.wide / 4) {
-        const p = add(add(fc, fr.d, off), fr.n, 0.3);
+        const p = add(add(fc, alg, off), nrm, 0.3);
         const others = faces.filter((f) => f.box !== it.box);
-        min = Math.min(min, cast(p, fr.n, C.floorSpace.deep, others, walls, 0.5));
+        min = Math.min(min, cast(p, nrm, C.floorSpace.deep, others, walls, 0.5));
       }
       if (min < C.floorSpace.deep - EPS) tight.push(`${APPLIANCE_NAMES[name]} (${fmt(min + 0.3)})`);
     }

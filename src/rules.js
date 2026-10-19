@@ -76,6 +76,7 @@ export const RULES = {
 
   // Biggest filler strip allowed to take up slack at the end of a run or beside an appliance.
   maxFiller: 3, // PLACEHOLDER
+  diagonalAppliance: 24, // widest sink or cooktop a diagonal corner cabinet can hold
 
   casingClearance: 1, // confirmed: cabinets stay 1" off door/window casing
   lowerWindowSill: 36, // confirmed: lowers only respect windows whose sill is under this
