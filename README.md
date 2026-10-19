@@ -1,6 +1,23 @@
 # Field-sketch
 
-A quick, local sketching tool for kitchen layouts, made for a cabinet specialist working from an iPad or iPhone. It sits in front of Syncly and the manufacturer catalogs: sketch the room, mark what's in it, and get a dimensioned starting point so drafting and ordering go faster.
+A quick, local sketching tool for kitchen layouts, made for a cabinet specialist working from an iPad or iPhone. It sits in front of Syncly (formerly 2020) and the manufacturer catalogs: sketch the room, mark what's in it, and get a dimensioned starting point so drafting and ordering go faster.
+
+## What it's for
+
+It does **not** replace Syncly or 2020, and it isn't meant to produce a finished, sellable design (a very simple kitchen might get close). Its job is to be fast in the field:
+
+- Get every measurement you need, and get them right: walls that must close, doors and windows with rough opening, casing-to-casing, position and swing, utilities marked on the drawing.
+- Then sketch cabinets the way you would with a pencil. There is no picking cabinets from a catalog. Pick the Cabinets pencil and drag a finger along a wall, and the boxes fill in using rules built into the app (standard sizes, fillers, windows and doors kept clear, blind and diagonal corners, hood place over the range, dishwasher end panels, and so on).
+- Drop appliance markers (sink, cooktop, range, fridge, oven, dishwasher, pantry, waste, microwave) and the layout works around them: the sink centers on its window, the range stays over its hookup, a pantry marker becomes a pantry cabinet of the width you give it.
+- Let the Rules tab check the layout against a kitchen checklist (walkways, work aisle, work triangle, counter beside the sink, fridge and range, clear floor at each appliance, and more) and remind you about the things a sketch can't prove.
+
+What you come away with is a set of constraints: the range fits here, a 36" corner fits there, a 12" cabinet fits on the end with 3" left over for a filler. You don't have to guess any of it. Then you draft in Syncly with those answers in hand.
+
+### Where it came from
+
+The author wrote it for their own work and then used it on two real kitchens: their own house, laid out start to finish in an afternoon, and an old job that never had a layout that worked. For the old job, redrawing the room on a tablet, with a different fridge spot, walls opened up, and a peninsula in place of an island that didn't fit, took about an hour. The sketch gave a layout that could be looked at and judged, and the work in Syncly that followed was mostly drafting. The app doesn't make the design decisions. It shows what fits, quickly, so those decisions can be made with real numbers.
+
+It's an opinionated tool built around one person's workflow and one set of cabinet lines. Several numbers (see `src/rules.js`) are placeholders until checked against a catalog. Treat its output as a rough layout, check all sizes before ordering, and expect to tweak it.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the full design and rules.
 
