@@ -484,10 +484,8 @@ function placeMarker(p, type = ui.markerTool) {
     if (type === 'column') {
       created.w = null;
       created.d = null;
-    } else if (APPLIANCE_TYPES.includes(type) && type !== 'pantry') {
+    } else if (APPLIANCE_TYPES.includes(type)) {
       created.w = RULES.defaultWidths[type];
-    } else if (type === 'pantry') {
-      created.w = null;
     }
     s.markers.push(created);
   });
@@ -495,7 +493,7 @@ function placeMarker(p, type = ui.markerTool) {
   if (type === 'column') {
     setActive({ kind: 'marker', id: created.id, field: 'w' }, [{ kind: 'marker', id: created.id, field: 'd' }]);
     render();
-  } else if (APPLIANCE_TYPES.includes(type) && type !== 'pantry') {
+  } else if (APPLIANCE_TYPES.includes(type)) {
     // Ask how wide; skipping keeps the usual size.
     setActive({ kind: 'marker', id: created.id, field: 'w' }, []);
     render();

@@ -2,7 +2,7 @@
 // Geometry and bookkeeping live here; the fitting itself is in fill.js and the numbers are in
 // rules.js. Positions along a run are inches from the run's wall start (wall runs) or from its
 // first end (free-standing island runs).
-import { RULES, MARKER_KIND, APPLIANCE_TYPES, UTILITY_TYPES, APPLIANCE_NAMES } from './rules.js';
+import { RULES, PANTRY_SIZES, MARKER_KIND, APPLIANCE_TYPES, UTILITY_TYPES, APPLIANCE_NAMES } from './rules.js';
 import { fillSegment } from './fill.js';
 import { wallFrames } from './recognize.js';
 import { dist, closestOnSegment, segIntersect } from './geometry.js';
@@ -141,6 +141,7 @@ function labelFor(layer, box) {
     case 'tall':
       if (box.type === 'fridge') return `REF ${size}`;
       if (box.type === 'oven') return `OVN ${size}`;
+      if (box.type === 'pantry') return `PNT ${size}`;
       return `T${size}`;
     default:
       return size;
@@ -200,7 +201,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
   const out = { layer, runs: [], zones: [], notes, tall: new Map(), markerBoxes: new Map() };
 
   // Uppers care about the full-height pieces, the pantry, and the blank place over a range or cooktop.
-  const appliances = state.markers.filter((m) => APPLIANCE_TYPES.includes(m.type) && MARKER_KIND[m.type] !== 'none' && (layer === 'lower' || MARKER_KIND[m.type] === 'tall' || m.type === 'pantry' || m.type === 'range' || m.type === 'cooktop'));
+  const appliances = state.markers.filter((m) => APPLIANCE_TYPES.includes(m.type) && MARKER_KIND[m.type] !== 'none' && (layer === 'lower' || MARKER_KIND[m.type] === 'tall' || m.type === 'range' || m.type === 'cooktop'));
   const utilities = state.markers.filter((m) => UTILITY_TYPES.includes(m.type));
 
   // Frames for every run, then give each appliance marker to the run it sits against.
@@ -289,15 +290,11 @@ export function computeLayout(layer, state, derived, lowerLayout) {
         return bestSeg === si;
       });
       const items = [];
-      const pantries = [];
       for (const mk of mine) {
         // In the uppers a cooktop is just a blank place for the hood, the same as a range.
         const kind = layer === 'upper' && mk.m.type === 'cooktop' ? 'void' : MARKER_KIND[mk.m.type];
-        if (kind === 'pantry') {
-          pantries.push(mk);
-          continue;
-        }
-        const width = mk.m.w || RULES.defaultWidths[mk.m.type];
+        let width = mk.m.w || RULES.defaultWidths[mk.m.type];
+        if (mk.m.type === 'pantry') width = PANTRY_SIZES.reduce((best, sz) => (Math.abs(sz - width) < Math.abs(best - width) ? sz : best), PANTRY_SIZES[0]);
         const center = Math.max(0, Math.min(segLen, mk.u - seg.lo));
         const reach = RULES.hookupReach;
         const need = RULES.hookups[mk.m.type] || [];
@@ -361,21 +358,6 @@ export function computeLayout(layer, state, derived, lowerLayout) {
       }
       const segBoxes = res.boxes.map((b) => ({ ...b, u0: b.u0 + seg.lo, u1: b.u1 + seg.lo, runId: run.id }));
 
-      // Pantry markers turn the box they sit in into a full-height cabinet.
-      for (const mk of pantries) {
-        const hit = segBoxes.find((b) => b.kind === 'base' && mk.u >= b.u0 - EPS && mk.u <= b.u1 + EPS);
-        if (hit) {
-          hit.kind = 'tall';
-          hit.type = 'pantry';
-          hit.id = mk.m.id;
-          usedMarkers.add(mk.m.id);
-        } else {
-          const other = segBoxes.find((b) => mk.u >= b.u0 - EPS && mk.u <= b.u1 + EPS);
-          if (other && other.kind === 'tall') usedMarkers.add(mk.m.id);
-          else notes.push({ level: 'info', text: 'A pantry marker isn’t on a cabinet.', markerId: mk.m.id });
-        }
-      }
-
       // Fridge panels go on any side that isn't a wall, a corner, or another full-height cabinet.
       const wallStart = first && run.kind === 'wall' && fr.u0 <= EPS;
       const wallEnd = last && run.kind === 'wall' && fr.u1 >= fr.L - EPS;
@@ -400,7 +382,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
 
     // Anything the segments couldn't place (e.g. markers over a blocked stretch).
     for (const mk of myMarkers) {
-      if (!usedMarkers.has(mk.m.id) && MARKER_KIND[mk.m.type] !== 'pantry' && !notes.some((n) => n.markerId === mk.m.id && /fit/.test(n.text))) {
+      if (!usedMarkers.has(mk.m.id) && !notes.some((n) => n.markerId === mk.m.id && /fit/.test(n.text))) {
         notes.push({ level: 'info', text: `${APPLIANCE_NAMES[mk.m.type]} marker is over a stretch with no cabinets.`, markerId: mk.m.id });
       }
     }

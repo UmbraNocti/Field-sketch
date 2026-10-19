@@ -83,7 +83,7 @@ export const RULES = {
   dishwasherMaxFromSink: 36, // confirmed: dishwasher within 3 ft of the sink
 
   // Width asked for when an appliance marker is dropped. The user can change it. PLACEHOLDER.
-  defaultWidths: { sink: 24, cooktop: 30, range: 30, fridge: 36, oven: 30, dishwasher: 24, waste: 18, microwave: 30 },
+  defaultWidths: { sink: 24, cooktop: 30, range: 30, fridge: 36, oven: 30, dishwasher: 24, waste: 18, microwave: 30, pantry: 24 },
 
   // Which utility markers an appliance must be touching. Confirmed: oven and range use 220V or
   // gas; fridge and dishwasher use a standard outlet. Sink and cooktop follow "handles like sink".
@@ -122,7 +122,7 @@ export const RULES = {
 //   void  = nothing goes there, fixed width (dishwasher, range)
 //   tall  = full-height, fixed width, same spot in lowers and uppers (fridge, oven)
 //   flex  = a cabinet box at least as wide as the marker (sink, cooktop)
-//   pantry = no width of its own; any box under it becomes full height
+//   pantry = full height like a fridge, but only in pantrySizes
 //   none  = a marker that checks rules but doesn't steer the layout (microwave)
 export const MARKER_KIND = {
   waste: 'flex',
@@ -133,8 +133,11 @@ export const MARKER_KIND = {
   oven: 'tall',
   sink: 'flex',
   cooktop: 'flex',
-  pantry: 'pantry',
+  pantry: 'tall',
 };
+
+// Pantry cabinets only come in these widths; a typed width snaps to the nearest.
+export const PANTRY_SIZES = [18, 24, 30, 36];
 
 export const APPLIANCE_TYPES = ['sink', 'cooktop', 'range', 'fridge', 'oven', 'dishwasher', 'pantry', 'waste', 'microwave'];
 export const UTILITY_TYPES = ['plumbing', 'outlet', 'outlet220', 'gas', 'vent', 'column'];

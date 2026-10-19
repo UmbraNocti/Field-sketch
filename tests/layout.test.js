@@ -234,6 +234,17 @@ test('a pantry marker makes the box under it full height', () => {
   assert.equal(tall.depth, 24);
 });
 
+test('pantry cabinets only come in 18, 24, 30 and 36 and a typed width snaps to one', () => {
+  for (const [typed, want] of [[null, 24], [18, 18], [26, 24], [28, 30], [34, 36], [42, 36]]) {
+    const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156)] });
+    s.markers.push({ id: 80, type: 'pantry', x: 60, y: 12, w: typed });
+    const p = run(s).runs[0].boxes.find((b) => b.type === 'pantry');
+    assert.ok(p, `pantry for ${typed}`);
+    near(p.size, want);
+    assert.equal(p.kind, 'tall');
+  }
+});
+
 test('a fridge needs panels on open sides, none against a wall', () => {
   const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156)] });
   s.markers.push({ id: 90, type: 'fridge', x: 78, y: 12, w: 36 });

@@ -119,7 +119,7 @@ function cabinetPanel(state, ui, layouts) {
   const selM = state.markers.find((m) => m.id === ui.selectedMarker && APPLIANCE_TYPES.includes(m.type));
   const selCard = selM
     ? `<div class="sel-card"><div><b>${esc(APPLIANCE_NAMES[selM.type])}</b>${selM.w ? ` \u00b7 ${esc(formatInches(selM.w))}` : ''} selected</div>
-        <div class="sel-actions">${selM.type !== 'pantry' ? `<button class="btn" data-act="edit-width" data-id="${selM.id}">Width</button>` : ''}
+        <div class="sel-actions"><button class="btn" data-act="edit-width" data-id="${selM.id}">Width</button>
         <button class="btn danger" data-act="del-marker" data-id="${selM.id}">Delete</button></div></div>`
     : '';
   const notes = lay.notes
