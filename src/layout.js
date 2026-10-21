@@ -279,6 +279,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
     let startBlind = null;
     let endBlind = null;
     const diagBoxes = [];
+    const boxes0 = [];
     const sr = roles.get(`${run.id}:start`);
     const er = roles.get(`${run.id}:end`);
     // A blind corner cabinet is centered on the other run's face line, so it sits in from the
@@ -291,8 +292,14 @@ export function computeLayout(layer, state, derived, lowerLayout) {
           const blind = { width: role.size, offset: Math.max(0, depth - role.size / 2), role };
           if (atStart) startBlind = blind;
           else endBlind = blind;
-        } else if (atStart) lo += depth;
-        else hi -= depth;
+        } else if (atStart) {
+          // The run that meets the blind cabinet stops short of it by a 3" filler.
+          boxes0.push({ u0: depth, u1: depth + RULES.blindFiller, kind: 'filler', cornerFiller: true, runId: run.id });
+          lo += depth + RULES.blindFiller;
+        } else {
+          boxes0.push({ u0: fr.L - depth - RULES.blindFiller, u1: fr.L - depth, kind: 'filler', cornerFiller: true, runId: run.id });
+          hi -= depth + RULES.blindFiller;
+        }
         return;
       }
       if (atStart) lo += role.size;
@@ -312,7 +319,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
     applyCorner(er, false);
     const blockers = run.kind === 'wall' ? blockersFor(layer, state, derived, run.wall, molding, notes) : [];
     const segs = segmentsOf(lo, hi, blockers);
-    const boxes = [];
+    const boxes = boxes0;
     const myMarkers = assigned.get(run.id) || [];
     const usedMarkers = new Set();
 
@@ -378,6 +385,7 @@ export function computeLayout(layer, state, derived, lowerLayout) {
             }
           }
         }
+        if (mk.m.type === 'fridge') item.panelFiller = RULES.endPanelFiller;
         items.push(item);
         usedMarkers.add(mk.m.id);
       }
@@ -392,6 +400,8 @@ export function computeLayout(layer, state, derived, lowerLayout) {
         freeShift: RULES.freeShiftWidths,
         startBlind: sb ? { width: sb.width, offset: sb.offset, extra: { corner: { key: sb.role.key, opt: sb.role.opt, count: sb.role.count } } } : null,
         endBlind: eb ? { width: eb.width, offset: eb.offset, extra: { corner: { key: eb.role.key, opt: eb.role.opt, count: eb.role.count } } } : null,
+        startFiller: first && run.kind === 'wall' && fr.u0 <= EPS && !sr ? RULES.wallFiller : 0,
+        endFiller: last && run.kind === 'wall' && fr.u1 >= fr.L - EPS && !er ? RULES.wallFiller : 0,
         items,
       });
       for (const id of res.dropped) {
@@ -402,7 +412,16 @@ export function computeLayout(layer, state, derived, lowerLayout) {
       if (res.viol > 0 && !res.boxes.some((b) => b.kind === 'gap')) {
         notes.push({ level: 'warn', text: `Run ${runIndex + 1} is tight: not every rule could be met.`, runId: run.id });
       }
-      const segBoxes = res.boxes.map((b) => ({ ...b, u0: b.u0 + seg.lo, u1: b.u1 + seg.lo, runId: run.id }));
+      // Neighbouring fillers (the required 1" plus any slack) are cut as one piece.
+      const segBoxes = [];
+      for (const b of res.boxes.map((x) => ({ ...x, u0: x.u0 + seg.lo, u1: x.u1 + seg.lo, runId: run.id }))) {
+        const prev = segBoxes[segBoxes.length - 1];
+        if (prev && prev.kind === 'filler' && b.kind === 'filler' && !prev.cornerFiller && !b.cornerFiller) {
+          prev.u1 = b.u1;
+          prev.wallFiller = prev.wallFiller || b.wallFiller;
+          prev.panelFiller = prev.panelFiller || b.panelFiller;
+        } else segBoxes.push(b);
+      }
 
       // Fridge panels go on any side that isn't a wall, a corner, or another full-height cabinet.
       const wallStart = first && run.kind === 'wall' && fr.u0 <= EPS;
@@ -411,8 +430,8 @@ export function computeLayout(layer, state, derived, lowerLayout) {
         const prev = segBoxes[i - 1];
         const next = segBoxes[i + 1];
         if (b.kind === 'tall' && b.type === 'fridge') {
-          const closedL = prev ? prev.kind === 'tall' || prev.kind === 'corner' : first && (wallStart || !!sb);
-          const closedR = next ? next.kind === 'tall' || next.kind === 'corner' : last && (wallEnd || !!eb);
+          const closedL = prev ? prev.kind === 'tall' || prev.kind === 'corner' || !!prev.wallFiller : first && (wallStart || !!sb);
+          const closedR = next ? next.kind === 'tall' || next.kind === 'corner' || !!next.wallFiller : last && (wallEnd || !!eb);
           b.panels = { left: !closedL, right: !closedR };
         } else if (layer === 'lower' && b.kind === 'void' && b.type === 'dishwasher') {
           // A dishwasher needs an end panel only where it is the end of the cabinets (a range doesn't).

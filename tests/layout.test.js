@@ -131,8 +131,8 @@ test('uppers get a 24 inch diagonal', () => {
 });
 
 test('the smallest box the fill uses is 12 inches', () => {
-  const tiny = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 12)] });
-  assert.deepEqual(run(tiny).runs[0].boxes.map((b) => b.label), ['B12']);
+  const tiny = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 13)] });
+  assert.deepEqual(run(tiny).runs[0].boxes.map((b) => b.label), ['F 1', 'B12']);
   // 51" between a window and a corner can now be filled with real boxes rather than slack.
   const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156)] });
   s.room.openings.push(win(0, 0.5, 30));
@@ -407,4 +407,35 @@ test('a diagonal corner can hold a sink or cooktop of 24 inches or less', () => 
   const fridge = base();
   fridge.markers.push({ id: 72, type: 'fridge', x: 146, y: 10, w: 24 });
   assert.equal(find(fridge).label, 'DC36');
+});
+
+test('runs keep 1" of filler at a wall, and 3" between the perpendicular run and a blind corner', () => {
+  const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156), wallRun(2, 'lower', 1, 0, 120)] });
+  const lay = run(s);
+  const a = lay.runs[0].boxes;
+  const b = lay.runs[1].boxes;
+  // Run 1 starts at the wall (west) with 1" of filler and has the blind corner at the east end.
+  assert.equal(a[0].kind, 'filler');
+  assert.ok(a[0].size >= 1 - 1e-6);
+  assert.ok(a.some((x) => x.kind === 'corner'));
+  // Run 2 starts a cabinet depth in, then a 3" filler, then boxes; it ends at the south wall with 1".
+  const fillers = b.filter((x) => x.kind === 'filler');
+  near(b[0].u0, 24);
+  assert.equal(b[0].kind, 'filler');
+  near(b[0].size, 3);
+  assert.ok(fillers[fillers.length - 1].size >= 1 - 1e-6);
+  assert.equal(b[b.length - 1].kind, 'filler');
+  near(b[b.length - 1].u1, 120);
+});
+
+test('a fridge gets at least 1" of filler against its end panel, in uppers as well', () => {
+  const s = kitchen({ runs: [wallRun(1, 'lower', 0, 0, 156), wallRun(2, 'upper', 0, 0, 156)] });
+  s.markers.push({ id: 90, type: 'fridge', x: 78, y: 12, w: 36 });
+  s.markers.push({ id: 91, type: 'outlet', x: 78, y: 6 });
+  for (const layer of ['lower', 'upper']) {
+    const bx = run(s, layer).runs[0].boxes;
+    const i = bx.findIndex((x) => x.type === 'fridge');
+    assert.ok(bx[i - 1].kind === 'filler' && bx[i - 1].size >= 1 - 1e-6, `${layer} left`);
+    assert.ok(bx[i + 1].kind === 'filler' && bx[i + 1].size >= 1 - 1e-6, `${layer} right`);
+  }
 });

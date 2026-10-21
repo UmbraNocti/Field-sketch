@@ -228,3 +228,5 @@ Reminders only: seating clearance, drawer/roll-out frontage, five standing-heigh
 **Waste** and **Microwave** markers: waste sits in a base cabinet (default 18"); a microwave can be placed on either layer, doesn't steer the layout, and only requires its cabinet to be 27" or more.
 
 A lower **diagonal corner** can hold a sink or cooktop of 24" or less: drop the marker on the diagonal and the corner becomes `DSB36` (sink) or `DCB36` (cooktop) instead of steering a run. Wider ones, and other appliances, still go in the runs.
+
+**Minimum fillers.** A run that ends at a wall keeps at least 1" of filler there (merged with any slack into one filler). A fridge, in the lowers and the uppers, gets at least 1" of filler between its end panel and any cabinet next to it. The run that meets a blind corner cabinet at the perpendicular stops 3" short of the blind box's face, with a 3" filler between them. Numbers: `RULES.wallFiller`, `endPanelFiller`, `blindFiller`.

@@ -75,6 +75,9 @@ export const RULES = {
   flexMax: 36,
 
   // Biggest filler strip allowed to take up slack at the end of a run or beside an appliance.
+  wallFiller: 1, // confirmed: at least 1" of filler where a run ends at a wall
+  endPanelFiller: 1, // confirmed: at least 1" of filler against a fridge end panel
+  blindFiller: 3, // confirmed: 3" of filler between the perpendicular run and a blind corner cabinet
   maxFiller: 3, // PLACEHOLDER
   diagonalAppliance: 24, // widest sink or cooktop a diagonal corner cabinet can hold
 

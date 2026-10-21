@@ -203,6 +203,11 @@ function thin(cands, limit) {
 
 // ---- the search ----
 
+// A gap next to an item that needs an end-panel filler: reserve `need` units of filler first (only
+// when there is a gap at all), and tile what's left. Returns the table index to use plus the
+// reserved filler and a violation if the gap is too small to hold it.
+const reserve = (g, need) => (need > 0 && g > 0 ? (g < need ? [0, 0, 1] : [g - need, need, 0]) : [g, 0, 0]);
+
 function solveDP(items, M, tab, dwMaxU) {
   const k = items.length;
   const gapAt = (g) => (g < 0 || g > tab.maxU ? null : g);
@@ -227,10 +232,10 @@ function solveDP(items, M, tab, dwMaxU) {
   {
     const r = rows[0];
     items[0].cands.forEach((c, j) => {
-      const g = c.s;
-      r.V[j] = c.viol + tab.viol[g];
+      const [g, ex, pen] = reserve(c.s, c.need || 0);
+      r.V[j] = c.viol + pen + tab.viol[g];
       r.C[j] = c.center;
-      r.F[j] = tab.filler[g];
+      r.F[j] = tab.filler[g] + ex;
       r.B[j] = tab.count[g];
       r.D[j] = c.drift;
     });
@@ -250,11 +255,12 @@ function solveDP(items, M, tab, dwMaxU) {
       let bp = -1;
       for (let q = 0; q < p.n; q++) {
         const e = pc[q].s + pc[q].w;
-        const g = c.s - e;
-        if (g < 0) continue;
-        const v = p.V[q] + c.viol + tab.viol[g] + (sinkDw && g > dwMaxU ? 1 : 0);
+        const g0 = c.s - e;
+        if (g0 < 0) continue;
+        const [g, ex, pen] = reserve(g0, (c.need || 0) + (pc[q].need || 0));
+        const v = p.V[q] + c.viol + pen + tab.viol[g] + (sinkDw && g0 > dwMaxU ? 1 : 0);
         const cc = p.C[q] + c.center;
-        const f = p.F[q] + tab.filler[g];
+        const f = p.F[q] + tab.filler[g] + ex;
         const b = p.B[q] + tab.count[g];
         const d = p.D[q] + c.drift;
         if (better(v, cc, f, b, d, bv, bc, bf, bb, bd)) {
@@ -284,11 +290,12 @@ function solveDP(items, M, tab, dwMaxU) {
   let td = Infinity;
   for (let j = 0; j < last.n; j++) {
     if (!Number.isFinite(last.V[j])) continue;
-    const g = M - (lc[j].s + lc[j].w);
-    if (g < 0) continue;
-    const v = last.V[j] + tab.viol[g];
+    const g0 = M - (lc[j].s + lc[j].w);
+    if (g0 < 0) continue;
+    const [g, ex, pen] = reserve(g0, lc[j].need || 0);
+    const v = last.V[j] + pen + tab.viol[g];
     const c = last.C[j];
-    const f = last.F[j] + tab.filler[g];
+    const f = last.F[j] + tab.filler[g] + ex;
     const b = last.B[j] + tab.count[g];
     const d = last.D[j];
     if (better(v, c, f, b, d, tv, tc, tf, tb, td)) {
@@ -319,7 +326,7 @@ function solveDP(items, M, tab, dwMaxU) {
 //   items : [{ id, type, kind: 'void'|'tall'|'flex', width, center, points, touched, target, fixedAt }]
 // Returns { boxes, dropped, viol } where boxes are { u0, u1, kind, ... } in inches.
 export function fillSegment(opts) {
-  const { len, sizes, maxFiller = 3, preferredMax = 36, flexMax = 36, dwMax = 36, freeShift = 1, startBlind = null, endBlind = null } = opts;
+  const { len, sizes, maxFiller = 3, preferredMax = 36, flexMax = 36, dwMax = 36, freeShift = 1, startBlind = null, endBlind = null, startFiller = 0, endFiller = 0 } = opts;
   const N = toU(len);
   const boxes = [];
   let loU = 0;
@@ -337,6 +344,17 @@ export function fillSegment(opts) {
     hiU = Math.max(loU, N - off - toU(endBlind.width));
     boxes.push({ u0: toIn(hiU), u1: toIn(N - off), kind: 'corner', side: 'end', ...(endBlind.extra || {}) });
     if (off > 0) boxes.push({ u0: toIn(N - off), u1: len, kind: 'filler', cornerFiller: true });
+  }
+  // A run that ends at a wall keeps a small filler there.
+  if (startFiller > 0 && !startBlind) {
+    const f = Math.min(toU(startFiller), hiU - loU);
+    boxes.push({ u0: toIn(loU), u1: toIn(loU + f), kind: 'filler', wallFiller: true });
+    loU += f;
+  }
+  if (endFiller > 0 && !endBlind) {
+    const f = Math.min(toU(endFiller), hiU - loU);
+    boxes.push({ u0: toIn(hiU - f), u1: toIn(hiU), kind: 'filler', wallFiller: true });
+    hiU -= f;
   }
   const M = hiU - loU;
   const tab = makeGapTable(sizes, Math.max(len, 1), maxFiller, preferredMax);
@@ -360,7 +378,8 @@ export function fillSegment(opts) {
   const attempt = (list, relaxed, limited) => {
     const items = list.map((it) => {
       const cands = it.kind === 'flex' ? flexCands(it, M, relaxed, sizesU, limited ? toU(flexMax) : Infinity) : fixedCands(it, M, relaxed, freeShift);
-      return { ...it, cands: thin(cands, 2500) };
+      const need = toU(it.panelFiller || 0);
+      return { ...it, cands: thin(cands, 2500).map((c) => (need ? { ...c, need } : c)) };
     });
     return { items, res: solveDP(items, M, tab, toU(dwMax)) };
   };
@@ -392,7 +411,23 @@ export function fillSegment(opts) {
     used = [];
   }
 
-  const pushGap = (a, b, where) => {
+  const pushGap = (a0, b0, where, needL = 0, needR = 0) => {
+    if (b0 - a0 <= 0) return;
+    // Filler reserved beside a fridge goes right against its panel.
+    let a = a0;
+    let b = b0;
+    if (needL + needR > b0 - a0) {
+      needL = 0;
+      needR = 0;
+    }
+    if (needL > 0) {
+      boxes.push({ u0: toIn(loU + a), u1: toIn(loU + a + needL), kind: 'filler', panelFiller: true });
+      a += needL;
+    }
+    if (needR > 0) {
+      boxes.push({ u0: toIn(loU + b - needR), u1: toIn(loU + b), kind: 'filler', panelFiller: true });
+      b -= needR;
+    }
     const g = b - a;
     if (g <= 0) return;
     const gi = Math.min(g, tab.maxU);
@@ -420,7 +455,7 @@ export function fillSegment(opts) {
   let cursor = 0;
   used.forEach((it, i) => {
     const c = solved.picks[i];
-    pushGap(cursor, c.s, i === 0 ? 'start' : 'mid');
+    pushGap(cursor, c.s, i === 0 ? 'start' : 'mid', i > 0 ? solved.picks[i - 1].need || 0 : 0, c.need || 0);
     boxes.push({
       u0: toIn(loU + c.s),
       u1: toIn(loU + c.s + c.w),
@@ -430,7 +465,7 @@ export function fillSegment(opts) {
     });
     cursor = c.s + c.w;
   });
-  pushGap(cursor, M, used.length ? 'end' : 'start');
+  pushGap(cursor, M, used.length ? 'end' : 'start', used.length ? solved.picks[used.length - 1].need || 0 : 0, 0);
 
   boxes.sort((a, b) => a.u0 - b.u0);
   return { boxes, dropped, viol: solved.viol };
